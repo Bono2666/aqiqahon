@@ -1337,7 +1337,9 @@ def category_add(request):
     if request.POST:
         form = FormCategory(request.POST, request.FILES)
         if form.is_valid():
-            form.save()
+            add = form.save(commit=False)
+            add.active = True if request.POST.get('active') else False
+            add.save()
             return HttpResponseRedirect(reverse('category-index'))
         else:
             message = form.errors
@@ -1393,7 +1395,9 @@ def category_update(request, _id):
         form = FormCategoryUpdate(
             request.POST, request.FILES, instance=categories)
         if form.is_valid():
-            form.save()
+            update = form.save(commit=False)
+            update.active = True if request.POST.get('active') else False
+            update.save()
             return HttpResponseRedirect(reverse('category-view', args=[_id, ]))
     else:
         form = FormCategoryUpdate(instance=categories)
@@ -1443,13 +1447,14 @@ def package_index(request):
 @login_required(login_url='/login/')
 @role_required(allowed_roles='PACKAGE')
 def package_add(request):
-    categories = Category.objects.all()
+    categories = Category.objects.filter(active=True)
     if request.POST:
         form = FormPackage(request.POST, request.FILES)
         if form.is_valid():
             new = form.save(commit=False)
             new.category_id = request.POST.get('category')
             new.type = request.POST.get('type')
+            new.active = True if request.POST.get('active') else False
             new.promo = True if request.POST.get('promo') else False
             new.save()
             return HttpResponseRedirect(reverse('package-view', args=[new.package_id, ]))
@@ -3356,13 +3361,14 @@ def package_addon_delete(request, _id, _eq):
 @role_required(allowed_roles='PACKAGE')
 def package_update(request, _id):
     packages = Package.objects.get(package_id=_id)
-    categories = Category.objects.all()
+    categories = Category.objects.filter(active=1)
     if request.POST:
         form = FormPackageUpdate(
             request.POST, request.FILES, instance=packages)
         if form.is_valid():
             update = form.save(commit=False)
             update.category_id = request.POST.get('category')
+            update.active = 1 if request.POST.get('active') else 0
             update.promo = 1 if request.POST.get('promo') else 0
             update.type = request.POST.get('type')
             update.male_price = request.POST.get('male_price')
@@ -5449,8 +5455,8 @@ def order_child_cs_delete(request, _id, _child):
 
 
 def order_package_add(request, _id, _cat, _pack, _type, _add):
-    categories = Category.objects.all()
-    packages = Package.objects.filter(category=_cat).exclude(package_id__in=OrderPackage.objects.filter(
+    categories = Category.objects.filter(active=True)
+    packages = Package.objects.filter(category=_cat, active=True).exclude(package_id__in=OrderPackage.objects.filter(
         order_id=_id).values_list('package_id', flat=True)) if _cat != '0' else None
     box_types = Pack.objects.filter(package=_pack) if _pack != '0' else None
     main_cuisines = MainCuisine.objects.filter(package=_pack)
@@ -5733,8 +5739,8 @@ def order_cs_package_add(request, _id, _cat, _pack, _type):
 
 
 def order_package_update(request, _id, _package, _cat, _pack, _type, _add):
-    categories = Category.objects.all()
-    packages = Package.objects.filter(category=_cat).exclude(package_id__in=OrderPackage.objects.filter(
+    categories = Category.objects.filter(active=True)
+    packages = Package.objects.filter(category=_cat, active=True).exclude(package_id__in=OrderPackage.objects.filter(
         order_id=_id).values_list('package_id', flat=True).exclude(package_id=_pack)) if _cat != '0' else None
     package = OrderPackage.objects.get(order_id=_id, id=_package)
     box_types = Pack.objects.filter(package=_pack) if _pack != '0' else None
@@ -6337,10 +6343,10 @@ def order_view(request, _id, _cat, _pack, _type, _crud):
     leftoverfood = OrderLeftoverFood.objects.filter(order_id=_id)
     form = FormOrderView(instance=order)
     formChild = FormOrderChild()
-    category = Category.objects.all()
-    packages = Package.objects.filter(category=_cat).exclude(package_id__in=OrderPackage.objects.filter(
+    category = Category.objects.filter(active=True)
+    packages = Package.objects.filter(category=_cat, active=True).exclude(package_id__in=OrderPackage.objects.filter(
         order_id=_id).values_list('package_id', flat=True)) if _cat != '0' else None
-    packages_upd = Package.objects.filter(category=_cat).exclude(package_id__in=OrderPackage.objects.filter(
+    packages_upd = Package.objects.filter(category=_cat, active=True).exclude(package_id__in=OrderPackage.objects.filter(
         order_id=_id).values_list('package_id', flat=True).exclude(package_id=_pack)) if _cat != '0' else None
     box = Pack.objects.filter(package=_pack) if _pack != '0' else None
     main_cuisines = MainCuisine.objects.filter(package=_pack)

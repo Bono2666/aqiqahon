@@ -123,6 +123,7 @@ class Equipment(models.Model):
 class Category(models.Model):
     category_id = models.CharField(max_length=50, primary_key=True)
     category_name = models.CharField(max_length=50)
+    active = models.BooleanField(default=True)
     entry_date = models.DateTimeField(null=True)
     entry_by = models.CharField(max_length=50, null=True)
     update_date = models.DateTimeField(null=True)
@@ -146,6 +147,7 @@ class Package(models.Model):
     package_name = models.CharField(max_length=50)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     promo = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
     male_price = models.DecimalField(
         max_digits=12, decimal_places=0, default=0)
     female_price = models.DecimalField(

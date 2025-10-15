@@ -18,7 +18,7 @@
                                 <h4 class="mb-2">ID Paket: {{ data.package_id }}</h4>
                             </div>
                             <div class="col-8 text-end">
-                                <input type="checkbox" class="cursor-pointer border mt-4" {% if crud == 'view' %}disabled{% endif %} name="aktif" {% if data.active %}checked{% endif %}/>
+                                <input type="checkbox" class="cursor-pointer border mt-4" {% if crud == 'view' %}disabled{% endif %} name="active" {% if data.active %}checked{% endif %}/>
                                 <label class="form-control-label mt-4 me-4">Aktif</label>
                                 <input type="checkbox" class="cursor-pointer border mt-4" {% if crud == 'view' %}disabled{% endif %} name="promo" {% if data.promo %}checked{% endif %}/>
                                 <label class="form-control-label mt-4 me-4">Ikut Promo</label>

@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.db import connection, IntegrityError
@@ -1447,7 +1448,7 @@ def package_index(request):
 @login_required(login_url='/login/')
 @role_required(allowed_roles='PACKAGE')
 def package_add(request):
-    categories = Category.objects.filter(active=True)
+    categories = Category.objects.all()
     if request.POST:
         form = FormPackage(request.POST, request.FILES)
         if form.is_valid():
@@ -3361,7 +3362,49 @@ def package_addon_delete(request, _id, _eq):
 @role_required(allowed_roles='PACKAGE')
 def package_update(request, _id):
     packages = Package.objects.get(package_id=_id)
-    categories = Category.objects.filter(active=1)
+    categories = Category.objects.all()
+    selected_rice = Rice.objects.filter(package_id=_id)
+    selected_cuisine = MainCuisine.objects.filter(package_id=_id)
+    selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
+    selected_sidecuisine1 = SideCuisine1.objects.filter(package_id=_id)
+    selected_sidecuisine2 = SideCuisine2.objects.filter(package_id=_id)
+    selected_sidecuisine3 = SideCuisine3.objects.filter(package_id=_id)
+    selected_sidecuisine4 = SideCuisine4.objects.filter(package_id=_id)
+    selected_sidecuisine5 = SideCuisine5.objects.filter(package_id=_id)
+    selected_beverage = Beverage.objects.filter(package_id=_id)
+    selected_eq = Bag.objects.filter(package_id=_id)
+    selected_pack = Pack.objects.filter(package_id=_id)
+    selected_souvenirs = Souvenir.objects.filter(package_id=_id)
+    selected_other = Other.objects.filter(package_id=_id)
+    selected_addon = Addon.objects.filter(package_id=_id)
+    rices = Cuisine.objects.all().exclude(
+        cuisine_id__in=Rice.objects.filter(package_id=_id).values_list('cuisine_id', flat=True))
+    main_cuisines = Cuisine.objects.all().exclude(
+        cuisine_id__in=MainCuisine.objects.filter(package_id=_id).values_list('cuisine_id', flat=True))
+    sub_cuisines = Cuisine.objects.all().exclude(
+        cuisine_id__in=SubCuisine.objects.filter(package_id=_id).values_list('cuisine_id', flat=True))
+    side_cuisines1 = Cuisine.objects.all().exclude(
+        cuisine_id__in=SideCuisine1.objects.filter(package_id=_id).values_list('cuisine_id', flat=True))
+    side_cuisines2 = Cuisine.objects.all().exclude(
+        cuisine_id__in=SideCuisine2.objects.filter(package_id=_id).values_list('cuisine_id', flat=True))
+    side_cuisines3 = Cuisine.objects.all().exclude(
+        cuisine_id__in=SideCuisine3.objects.filter(package_id=_id).values_list('cuisine_id', flat=True))
+    side_cuisines4 = Cuisine.objects.all().exclude(
+        cuisine_id__in=SideCuisine4.objects.filter(package_id=_id).values_list('cuisine_id', flat=True))
+    side_cuisines5 = Cuisine.objects.all().exclude(
+        cuisine_id__in=SideCuisine5.objects.filter(package_id=_id).values_list('cuisine_id', flat=True))
+    eqs = Equipment.objects.all().exclude(equipment_id__in=Bag.objects.filter(
+        package_id=_id).values_list('equipment_id', flat=True))
+    box = Equipment.objects.all().exclude(equipment_id__in=Pack.objects.filter(
+        package_id=_id).values_list('equipment_id', flat=True))
+    addons = Equipment.objects.all().exclude(equipment_id__in=Addon.objects.filter(
+        package_id=_id).values_list('equipment_id', flat=True))
+    beverages = Equipment.objects.all().exclude(equipment_id__in=Beverage.objects.filter(
+        package_id=_id).values_list('equipment_id', flat=True))
+    souvenirs = Equipment.objects.all().exclude(equipment_id__in=Souvenir.objects.filter(
+        package_id=_id).values_list('equipment_id', flat=True))
+    others = Equipment.objects.all().exclude(equipment_id__in=Other.objects.filter(
+        package_id=_id).values_list('equipment_id', flat=True))
     if request.POST:
         form = FormPackageUpdate(
             request.POST, request.FILES, instance=packages)
@@ -3383,6 +3426,34 @@ def package_update(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'selected_rice': selected_rice,
+        'selected_cuisine': selected_cuisine,
+        'selected_subcuisine': selected_subcuisine,
+        'selected_sidecuisine1': selected_sidecuisine1,
+        'selected_sidecuisine2': selected_sidecuisine2,
+        'selected_sidecuisine3': selected_sidecuisine3,
+        'selected_sidecuisine4': selected_sidecuisine4,
+        'selected_sidecuisine5': selected_sidecuisine5,
+        'selected_beverage': selected_beverage,
+        'selected_eq': selected_eq,
+        'selected_pack': selected_pack,
+        'selected_souvenirs': selected_souvenirs,
+        'selected_other': selected_other,
+        'selected_addon': selected_addon,
+        'rices': rices,
+        'main_cuisines': main_cuisines,
+        'sub_cuisines': sub_cuisines,
+        'side_cuisines1': side_cuisines1,
+        'side_cuisines2': side_cuisines2,
+        'side_cuisines3': side_cuisines3,
+        'side_cuisines4': side_cuisines4,
+        'side_cuisines5': side_cuisines5,
+        'beverages': beverages,
+        'eqs': eqs,
+        'box': box,
+        'souvenirs': souvenirs,
+        'others': others,
+        'addons': addons,
         'notif': order_notification(request),
         'segment': 'package',
         'group_segment': 'master',
@@ -5468,6 +5539,8 @@ def order_package_add(request, _id, _cat, _pack, _type, _add):
     side_cuisines5 = SideCuisine5.objects.filter(package=_pack)
     rices = Rice.objects.filter(package=_pack)
     bags = Bag.objects.filter(package=_pack)
+    beverages = Beverage.objects.filter(
+        package=_pack) if _pack != '0' else None
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT apps_addon.equipment_id, equipment_name, extra_price, q_addon.equipment_id, q_addon.quantity FROM apps_equipment INNER JOIN apps_addon ON apps_equipment.equipment_id = apps_addon.equipment_id LEFT JOIN (SELECT * FROM apps_orderpackageaddon WHERE order_id = '" + str(_id) + "' AND package_id = '" + str(_pack) + "') AS q_addon ON apps_addon.equipment_id = q_addon.equipment_id WHERE apps_addon.package_id = '" + str(_pack) + "' ORDER BY equipment_name")
@@ -5665,6 +5738,7 @@ def order_package_add(request, _id, _cat, _pack, _type, _add):
         'side_cuisines5': side_cuisines5,
         'rices': rices,
         'bags': bags,
+        'beverages': beverages,
         'addons': addons,
         'addon_order': addon_order,
         'souvenirs': souvenirs,
@@ -6302,10 +6376,10 @@ def form_index(request):
 
 
 @login_required(login_url='/login/')
-@role_required(allowed_roles='ORDER')
-def order_index(request, _branch):
-    all_orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-order_id', 'regional').exclude(order_status__in=[
-        'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+@role_required(allowed_roles='ORDER-ARCHIVE')
+def order_archive(request, _branch):
+    all_orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__lt=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=[
+        'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__lt=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
     if _branch == 'all':
         orders = all_orders
     else:
@@ -6315,6 +6389,38 @@ def order_index(request, _branch):
     branch = AreaSales.objects.filter(area_id__in=br_order)
     br_name = AreaSales.objects.get(
         area_id=_branch).area_name if _branch != 'all' else 'Semua Cabang'
+    # get date from delivery date
+
+    context = {
+        'data': orders,
+        'branch': branch,
+        'br_name': br_name,
+        'notif': order_notification(request),
+        'segment': 'order-archive',
+        'group_segment': 'transaction',
+        'crud': 'index',
+        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='ORDER-ARCHIVE') if not request.user.is_superuser else Auth.objects.all(),
+    }
+
+    return render(request, 'home/order_archive.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='ORDER')
+def order_index(request, _branch):
+    all_orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__gte=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=[
+        'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__gte=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+    if _branch == 'all':
+        orders = all_orders
+    else:
+        orders = Order.objects.filter(regional_id=_branch).order_by('-order_id', 'regional').exclude(order_status__in=[
+            'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+    br_order = all_orders.values_list('regional', flat=True).distinct()
+    branch = AreaSales.objects.filter(area_id__in=br_order)
+    br_name = AreaSales.objects.get(
+        area_id=_branch).area_name if _branch != 'all' else 'Semua Cabang'
+    # get date from delivery date
 
     context = {
         'data': orders,
@@ -6466,10 +6572,11 @@ def order_view(request, _id, _cat, _pack, _type, _crud):
         'got_promo': got_promo,
         'gifts': gifts,
         'notif': order_notification(request),
-        'segment': 'order',
+        'segment': 'order' if order.delivery_date.date() > date.today() - timedelta(days=90) else 'order-archive',
         'group_segment': 'transaction',
         'crud': 'view',
         'status': order.order_status,
+        'archive': True if order.delivery_date.date() <= date.today() - timedelta(days=90) else False,
         'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
         'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='ORDER') if not request.user.is_superuser else Auth.objects.all(),
     }

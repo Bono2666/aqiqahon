@@ -268,13 +268,28 @@
                             {% if souvenirs or addons %}
                             <div class="row">
                                 {% if souvenirs %}
-                                <div class="col-md-6">
+                                <div class="{% if beverages %}col-md-3{% else %}col-md-6{% endif %}">
                                     <div class="form-group shadow-none mb-0">
                                         <label for="souvenir">Pilihan Souvenir</label>
                                         <select name="souvenir" class="form-control form-select-sm" required>
                                             <option value="">Pilih Souvenir</option>
                                             {% for souvenir in souvenirs %}"
                                             <option value="{{ souvenir.equipment.equipment_name }}" {% if selected_package.souvenir == souvenir.equipment.equipment_name %}selected{% endif %}>{{ souvenir.equipment.equipment_name }}{% if souvenir.extra_price > 0 %} (+ Rp {{ souvenir.extra_price|intcomma }}){% endif %}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if beverages %}
+                                <div class="col-md-3">
+                                    <div class="form-group shadow-none mb-0">
+                                        <label for="beverages">Pilihan Minuman</label>
+                                        <select name="beverages" class="form-control form-select-sm" required>
+                                            {% if beverages %}
+                                            <option value="">Pilihan Minuman</option>
+                                            {% endif %}
+                                            {% for beverage in beverages %}"
+                                            <option value="{{ beverage.equipment.equipment_name }}" {% if beverage.default == 1 %}selected{% endif %}>{{ beverage.equipment.equipment_name }}{% if beverage.extra_price > 0 %} (+ Rp {{ beverage.extra_price|intcomma }}/box){% endif %}</option>
                                             {% endfor %}
                                         </select>
                                     </div>

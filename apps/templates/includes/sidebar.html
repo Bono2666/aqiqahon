@@ -77,6 +77,11 @@
                 <span class="nav-link-text ms-1 {% if 'FORM' not in role and not request.user.is_superuser %}disabled{% endif %}">Form</span>
               </a>
             </li>
+            <li class="nav-item {% if segment == 'order-archive' %}active{% endif %} list-unstyled">
+              <a class="nav-link button cursor-pointer {% if 'ORDER-ARCHIVE' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'order-archive' 'all' %}"{% endif %}>
+                <span class="nav-link-text ms-1 {% if 'ORDER-ARCHIVE' not in role and not request.user.is_superuser %}disabled{% endif %}">Arsip</span>
+              </a>
+            </li>
           </ul>
         </div>
       </li>

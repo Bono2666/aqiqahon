@@ -6293,7 +6293,7 @@ def order_cancel(request, _id):
     order.order_status = 'BATAL'
     order.save()
 
-    return HttpResponseRedirect(reverse('order-index', args=['all']))
+    return HttpResponseRedirect(reverse('order-index', args=['all', '0']))
 
 
 def order_confirmed(request, _id):
@@ -6354,7 +6354,7 @@ def order_confirmed(request, _id):
                 )
                 new_detail.save()
 
-    return HttpResponseRedirect(reverse('order-index', args=['all']))
+    return HttpResponseRedirect(reverse('order-index', args=['all', '0']))
 
 
 @login_required(login_url='/login/')
@@ -6377,14 +6377,20 @@ def form_index(request):
 
 @login_required(login_url='/login/')
 @role_required(allowed_roles='ORDER-ARCHIVE')
-def order_archive(request, _branch):
+def order_archive(request, _branch, _date):
     all_orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__lt=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=[
         'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__lt=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
     if _branch == 'all':
+        if _date != '0':
+            all_orders = all_orders.filter(delivery_date=_date)
         orders = all_orders
     else:
-        orders = Order.objects.filter(regional_id=_branch).order_by('-order_id', 'regional').exclude(order_status__in=[
-            'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+        if _date == '0':
+            orders = Order.objects.filter(regional_id=_branch).order_by('-order_id', 'regional').exclude(order_status__in=[
+                'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+        else:
+            orders = Order.objects.filter(regional_id=_branch, delivery_date=_date).order_by('-order_id', 'regional').exclude(order_status__in=[
+                'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch, delivery_date=_date).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
     br_order = all_orders.values_list('regional', flat=True).distinct()
     branch = AreaSales.objects.filter(area_id__in=br_order)
     br_name = AreaSales.objects.get(
@@ -6395,6 +6401,8 @@ def order_archive(request, _branch):
         'data': orders,
         'branch': branch,
         'br_name': br_name,
+        'selected_branch': _branch,
+        'selected_date': _date,
         'notif': order_notification(request),
         'segment': 'order-archive',
         'group_segment': 'transaction',
@@ -6408,14 +6416,20 @@ def order_archive(request, _branch):
 
 @login_required(login_url='/login/')
 @role_required(allowed_roles='ORDER')
-def order_index(request, _branch):
+def order_index(request, _branch, _date):
     all_orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__gte=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=[
         'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__gte=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
     if _branch == 'all':
+        if _date != '0':
+            all_orders = all_orders.filter(delivery_date=_date)
         orders = all_orders
     else:
-        orders = Order.objects.filter(regional_id=_branch).order_by('-order_id', 'regional').exclude(order_status__in=[
-            'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+        if _date == '0':
+            orders = Order.objects.filter(regional_id=_branch, delivery_date__gte=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=[
+                'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch, delivery_date__gte=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+        else:
+            orders = Order.objects.filter(regional_id=_branch, delivery_date=_date).order_by('-order_id', 'regional').exclude(order_status__in=[
+                'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch, delivery_date=_date).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
     br_order = all_orders.values_list('regional', flat=True).distinct()
     branch = AreaSales.objects.filter(area_id__in=br_order)
     br_name = AreaSales.objects.get(
@@ -6426,6 +6440,8 @@ def order_index(request, _branch):
         'data': orders,
         'branch': branch,
         'br_name': br_name,
+        'selected_branch': _branch,
+        'selected_date': _date,
         'notif': order_notification(request),
         'segment': 'order',
         'group_segment': 'transaction',

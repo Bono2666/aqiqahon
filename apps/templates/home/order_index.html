@@ -19,12 +19,12 @@
                     </div>
                     <div class="{% if request|is_mobile %}col-7{% else %}col-2{% endif %} dropdown-center">
                         <div class="input-group input-group-alternative cursor-pointer">
-                            <a class="form-control form-control-sm pe-6 border" data-bs-toggle="modal" data-bs-target="#dialog-branch">{{ br_name }}</a>
+                            <a class="form-control form-control-sm pe-6 border" data-bs-toggle="modal" data-bs-target="#dialog-branch" title="Pilih Cabang">{{ br_name }}</a>
                             <span class="input-group-text end-0 pe-2 py-2 text-white z-index-0 bg-gradient-dark" data-bs-toggle="modal" data-bs-target="#dialog-branch"><i class="fas fa-angle-down"></i></span>
                         </div>
                     </div>
                     <div class="{% if request|is_mobile %}col-12 mt-3{% else %}col-2 text-end{% endif %}">
-                        <input type="date" id="filter-date" class="form-control form-control-sm" value="{% if date_filter %}{{ date_filter }}{% endif %}">
+                        <input type="date" id="filter-date" class="form-control form-control-sm" value="{% if selected_date != '0' %}{{ selected_date }}{% endif %}" title="Filter Tanggal Antar">
                     </div>
                 </div>
                 <div class="card-body px-0 pt-0 pb-2">
@@ -122,7 +122,7 @@
                         <div class="table-responsive p-0">
                             <table class="table align-items-center mb-0" id="branchTable">
                                 <tbody>
-                                    <tr data-href="{% url 'order-index' 'all' %}" class="cursor-pointer">
+                                    <tr data-href="{% url 'order-index' 'all' selected_date %}" class="cursor-pointer">
                                         <td>
                                             <div class="d-flex pe-2 py-0">
                                                 <div class="d-flex flex-column justify-content-center">
@@ -132,7 +132,7 @@
                                         </td>
                                     </tr>
                                     {% for item in branch %}
-                                    <tr data-href="{% url 'order-index' item.area_id %}" class="cursor-pointer">
+                                    <tr data-href="{% url 'order-index' item.area_id selected_date %}" class="cursor-pointer">
                                         <td>
                                             <div class="d-flex pe-2 py-0">
                                                 <div class="d-flex flex-column justify-content-center">
@@ -159,11 +159,14 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     var dateInput = document.getElementById('filter-date');
+    var selectedBranch = "{{ selected_branch }}";
     dateInput.addEventListener('change', function() {
         var selectedDate = this.value;
-        var currentUrl = window.location.href.split('?')[0]; // Get current URL without query
-        var newUrl = currentUrl + '?delivery_date=' + selectedDate;
-        window.location.href = newUrl;
+        if(selectedDate === '') {
+            window.location.href = '{% url "order-index" "all" "0" %}';
+        } else {
+            window.location.href = '{% url "order-index" "all" "0" %}'.replace('all', selectedBranch).replace('0', selectedDate);
+        }
     });
 
     $(document).ready( function () {

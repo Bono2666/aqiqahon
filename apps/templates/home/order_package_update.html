@@ -278,13 +278,26 @@
                             {% if addons or souvenirs %}
                             <div class="row">
                                 {% if souvenirs %}
-                                <div class="col-md-6">
+                                <div class="{% if beverages %}col-md-3{% else %}col-md-6{% endif %}">
                                     <div class="form-group shadow-none mb-0">
-                                        <label for="souvenir">Souvenir</label>
-                                        <div class="input-group input-group-alternative">
-                                            <a id="souvenir" class="form-control form-control-sm border" data-bs-toggle="modal" data-bs-target="#dialog-souvenir">{% if souvenir_order %}{{ souvenir_order }}{% else %}Pilih Souvenir{% endif %}</a>
-                                            <span class="input-group-text bg-transparent end-0 pe-3 py-2 text-body z-index-0" data-bs-toggle="modal" data-bs-target="#dialog-souvenir"><i class="fas fa-angle-down"></i></span>
-                                        </div>
+                                        <label for="souvenir">Pilihan Souvenir</label>
+                                        <select name="souvenir" class="form-control form-select-sm" required>
+                                            {% for souvenir in souvenirs %}"
+                                            <option value="{{ souvenir.equipment.equipment_name }}" {% if data.souvenir == souvenir.equipment.equipment_name %}selected{% endif %}>{{ souvenir.equipment.equipment_name }}{% if souvenir.extra_price > 0 %} (+ Rp {{ souvenir.extra_price|intcomma }}){% endif %}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if beverages %}
+                                <div class="col-md-3">
+                                    <div class="form-group shadow-none mb-0">
+                                        <label for="beverages">Pilihan Minuman</label>
+                                        <select name="beverages" class="form-control form-select-sm" required>
+                                            {% for beverage in beverages %}"
+                                            <option value="{{ beverage.equipment.equipment_name }}" {% if data.beverage == beverage.equipment.equipment_name %}selected{% endif %}>{{ beverage.equipment.equipment_name }}{% if beverage.extra_price > 0 %} (+ Rp {{ beverage.extra_price|intcomma }}/box){% endif %}</option>
+                                            {% endfor %}
+                                        </select>
                                     </div>
                                 </div>
                                 {% endif %}
@@ -467,7 +480,19 @@
     let portion = document.getElementById('id-box');
     let box_qty = parseInt('{{ selected_package.box }}');
     let next = document.getElementById('next');
-    let souvenir = document.getElementById('souvenir').innerText;
+    let souvenir = document.getElementById('souvenir');
+    let souvenirs = "{{ souvenirs }}";
+
+    add.addEventListener('click', function() {
+        if (souvenirs) {
+            if (souvenir == 'Pilih Souvenir') {
+                alert('Silakan pilih souvenir terlebih dahulu');
+                return false;
+            }    
+        }
+        form.action = "{% url 'order-package-update' order_id data.id cat pack type 1 %}";
+        form.submit();
+    });
 
     next.addEventListener('click', function() {
         if (souvenir == 'Pilih Souvenir') {
@@ -517,16 +542,6 @@
         form.submit();
     });
     
-    add.addEventListener('click', function() {
-        if (souvenir == 'Pilih Souvenir') {
-            alert('Silakan pilih souvenir terlebih dahulu');
-            return false;
-        } else {
-            form.action = "{% url 'order-package-update' order_id data.id cat pack type 1 %}";
-            form.submit();
-        }
-    });
-
     c.forEach(function(checkbox, index) {
         checkbox.addEventListener('click', function() {
             if (c[index].checked == true) {

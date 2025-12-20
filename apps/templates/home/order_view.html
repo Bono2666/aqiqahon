@@ -871,13 +871,25 @@
                             {% if addons or souvenirs %}
                             <div class="row">
                                 {% if souvenirs %}
-                                <div class="col-md-6">
+                                <div class="{% if beverages %}col-md-3{% else %}col-md-6{% endif %}">
                                     <div class="form-group shadow-none mb-0">
                                         <label for="souvenir">Souvenir</label>
                                         <select name="souvenir" class="form-control form-select-sm" required>
                                             <option value="">Pilih Souvenir</option>
                                             {% for souvenir in souvenirs %}
                                             <option value="{{ souvenir.equipment.equipment_name }}" {% if souvenir.default == 1 %}selected{% endif %}>{{ souvenir.equipment.equipment_name }}{% if souvenir.extra_price > 0 %} (+ Rp {{ souvenir.extra_price|intcomma }}){% endif %}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if beverages %}
+                                <div class="col-md-3">
+                                    <div class="form-group shadow-none mb-0">
+                                        <label for="beverage">Minuman</label>
+                                        <select name="beverage" class="form-control form-select-sm" required>
+                                            {% for beverage in beverages %}
+                                            <option value="{{ beverage.equipment.equipment_name }}" {% if beverage.default == 1 %}selected{% endif %}>{{ beverage.equipment.equipment_name }}{% if beverage.extra_price > 0 %} (+ Rp {{ beverage.extra_price|intcomma }}){% endif %}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
@@ -1125,12 +1137,24 @@
                             {% if addons or souvenirs %}
                             <div class="row">
                                 {% if souvenirs %}
-                                <div class="col-md-6">
+                                <div class="{% if beverages %}col-md-3{% else %}col-md-6{% endif %}">
                                     <div class="form-group shadow-none mb-0">
                                         <label for="souvenir">Souvenir</label>
-                                        <select name="souvenir" class="form-control form-select-sm">
+                                        <select name="souvenir" class="form-control form-select-sm" required>
                                             {% for souvenir in souvenirs %}"
                                             <option value="{{ souvenir.equipment.equipment_name }}" {% if upd_package.souvenir %}{% if souvenir.equipment.equipment_name == upd_package.souvenir %}selected{% endif %}{% else %}{% if souvenir.default == 1 %}selected{% endif %}{% endif %}>{{ souvenir.equipment.equipment_name }}{% if souvenir.extra_price > 0 %} (+ Rp {{ souvenir.extra_price|intcomma }}){% endif %}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if beverages %}
+                                <div class="col-md-3">
+                                    <div class="form-group shadow-none mb-0">
+                                        <label for="beverage">Minuman</label>
+                                        <select name="beverage" class="form-control form-select-sm" required>
+                                            {% for beverage in beverages %}
+                                            <option value="{{ beverage.equipment.equipment_name }}" {% if upd_package.beverage %}{% if beverage.equipment.equipment_name == upd_package.beverage %}selected{% endif %}{% else %}{% if beverage.default == 1 %}selected{% endif %}{% endif %}>{{ beverage.equipment.equipment_name }}{% if beverage.extra_price > 0 %} (+ Rp {{ beverage.extra_price|intcomma }}){% endif %}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
@@ -1407,6 +1431,36 @@
     let type = '{{ type }}';
     let crud = '{{ crud }}';
 
+    $(document).on('click', 'tbody tr td:not(:last-child)', function() {
+        var href = $(this).parent().data('href');
+        if(href) { // Check if href data exists
+            window.location = href;
+        } else {
+            console.log("No data in href");
+        }
+    });
+
+    if (crudStatus == 'add') {
+        modalAdd.show();
+        modalAdd._config.keyboard = false;
+    } else if (crudStatus != '0') {
+        modalEdit.show();
+        modalEdit._config.keyboard = false;
+    }
+
+    btnSaveOrder.addEventListener('click', function () {
+        orderForm.submit();
+    });
+
+    btnSavePaket.addEventListener('click', function () {
+        packForm.submit();
+    });
+
+    btnEditPaket.addEventListener('click', function () {
+        editPackForm.action = "{% url 'order-package-cs-update' data.order_id cat pack type %}";
+        editPackForm.submit();
+    });
+
     if (gotPromo && inputPromo.value == '' && cat == '0' && pack == '0' && type == '0' && crudStatus == '0' && crud == 'view') {
         alert('Anda belum memilih hadiah promo. Silakan pilih hadiah promo.');
     }
@@ -1482,28 +1536,6 @@
         });
     });
 
-    $(document).on('click', 'tbody tr td:not(:last-child)', function() {
-        var href = $(this).parent().data('href');
-        if(href) { // Check if href data exists
-            window.location = href;
-        } else {
-            console.log("No data in href");
-        }
-    });
-
-    btnSaveOrder.addEventListener('click', function () {
-        orderForm.submit();
-    });
-
-    btnSavePaket.addEventListener('click', function () {
-        packForm.submit();
-    });
-
-    btnEditPaket.addEventListener('click', function () {
-        editPackForm.action = "{% url 'order-package-cs-update' data.order_id cat pack type %}";
-        editPackForm.submit();
-    });
-
     btnSavePaket.addEventListener('click', function () {
         let quantity = document.getElementById('id-quantity').value;
         let unitPrice = document.getElementById('id-unit-price').value;
@@ -1511,14 +1543,6 @@
 
         totalPrice.value = quantity * unitPrice;
     });
-
-    if (crudStatus == 'add') {
-        modalAdd.show();
-        modalAdd._config.keyboard = false;
-    } else if (crudStatus != '0') {
-        modalEdit.show();
-        modalEdit._config.keyboard = false;
-    }
 
     c.forEach(function(checkbox, index) {
         checkbox.addEventListener('click', function() {

@@ -466,6 +466,11 @@
     let portion = document.getElementById('id-box');
     let box_qty = parseInt('{{ selected_package.box }}');
 
+    add.addEventListener('click', function() {
+        form.action = "{% url 'order-package-add' order_id cat pack type 1 %}";
+        form.submit();
+    });
+
     portion.addEventListener('change', function() {
         if (portion.value < 1) {
             alert('Jumlah box/porsi tidak boleh kurang dari 1');
@@ -490,11 +495,6 @@
         form.submit();
     });
     
-    add.addEventListener('click', function() {
-        form.action = "{% url 'order-package-add' order_id cat pack type 1 %}";
-        form.submit();
-    });
-
     c.forEach(function(checkbox, index) {
         checkbox.addEventListener('click', function() {
             if (c[index].checked == true) {

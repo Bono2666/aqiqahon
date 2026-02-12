@@ -122,7 +122,7 @@ class Equipment(models.Model):
 
 class Category(models.Model):
     category_id = models.CharField(max_length=50, primary_key=True)
-    category_name = models.CharField(max_length=50)
+    category_name = models.CharField(max_length=100)
     active = models.BooleanField(default=True)
     entry_date = models.DateTimeField(null=True)
     entry_by = models.CharField(max_length=50, null=True)

@@ -34,6 +34,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from crum import get_current_user
 from apps.notifications import order_notification
+import re
 
 
 @login_required(login_url='/login/')
@@ -7180,8 +7181,10 @@ def order_invoice(request, _id):
         pdf_file.setFont("Helvetica", 8)
         qty = ' - ' + str(package[i - 1].package.quantity) + \
             ' - ' if package[i - 1].package.quantity > 0 else ''
+        category_clean = re.sub(r'\s*\([^)]*\)',
+                                '', package[i - 1].category.category_name)
         pdf_file.drawString(
-            40, y + 30, package[i - 1].category.category_name + ' - ' + package[i - 1].package.package_name + qty)
+            40, y + 30, f"{category_clean} - {package[i - 1].package.package_name}{qty}")
         if package[i - 1].package.quantity > 0:
             pdf_file.drawString(40, y + 20, 'Hewan ' + package[i - 1].type)
         pdf_file.rect(195, y - 15, 180, 55, stroke=True)

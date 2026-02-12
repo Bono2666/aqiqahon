@@ -7633,8 +7633,10 @@ def order_bap(request, _id):
         pdf_file.setFont("Helvetica", 8)
         qty = ' - ' + str(package[i - 1].package.quantity) + \
             ' - ' if package[i - 1].package.quantity > 0 else ''
+        category_clean = re.sub(r'\s*\([^)]*\)',
+                                '', package[i - 1].category.category_name)
         pdf_file.drawString(
-            40, y + 30, package[i - 1].category.category_name + ' - ' + package[i - 1].package.package_name + qty)
+            40, y + 30, f"{category_clean} - {package[i - 1].package.package_name}{qty}")
         if package[i - 1].package.quantity > 0:
             pdf_file.drawString(40, y + 20, 'Hewan ' + package[i - 1].type)
         pdf_file.rect(195, y - 15, 180, 55, stroke=True)
@@ -7981,8 +7983,10 @@ def order_checklist(request, _id):
         y -= 12
         pdf_file.drawString(title_x, y, "Menu")
         pdf_file.drawString(title_x + 80, y, ':')
+        category_clean = re.sub(r'\s*\([^)]*\)',
+                                '', package[i].category.category_name)
         pdf_file.drawString(
-            title_x + 90, y, package[i].category.category_name + ' - ' + package[i].package.package_name)
+            title_x + 90, y, f"{category_clean} - {package[i].package.package_name}")
         y -= 12
         pdf_file.drawString(title_x, y, "Jumlah Box/Porsi")
         pdf_file.drawString(title_x + 80, y, ':')

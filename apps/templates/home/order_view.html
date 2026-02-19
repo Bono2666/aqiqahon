@@ -579,7 +579,7 @@
                                     <th class="mb-0 text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
                                         Menu Olahan</th>
                                     <th class="mb-0 text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 text-end">Jumlah Box</th>
-                                    <th class="mb-0 text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Domba</th>
+                                    <th class="mb-0 text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Hewan</th>
                                     <th class="mb-0 text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 text-end">Qty</th>
                                     <th class="mb-0 text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 text-end">Harga Satuan</th>
                                     <th class="mb-0 text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 text-end">Sub Total</th>
@@ -688,7 +688,7 @@
                                 {% if selected_package.quantity > 0 %}
                                 <div class="col-md-4">
                                     <div class="shadow-none">
-                                        <label class="form-control-label" for="id-type">Jenis Kambing</label>
+                                        <label class="form-control-label" for="id-type">Jenis Hewan</label>
                                         <select class="form-control form-select-sm" name="type" id="id-type" onchange="window.location.href=this.value" required>
                                             {% if selected_package.male_price > 0 %}
                                             <option value="{% url 'order-view' data.order_id cat pack 'Jantan' 'add' %}" {% if type == 'Jantan' %}selected{% endif %}>Jantan</option>
@@ -957,7 +957,7 @@
                                 {% if selected_package.quantity > 0 %}
                                 <div class="col-md-4">
                                     <div class="shadow-none">
-                                        <label class="form-control-label" for="id-type">Jenis Kambing</label>
+                                        <label class="form-control-label" for="id-type">Jenis Hewan</label>
                                         <select class="form-control form-select-sm" name="type" id="id-type" onchange="window.location.href=this.value" required>
                                             {% if selected_package.male_price > 0 %}
                                             <option value="{% url 'order-view' data.order_id cat pack 'Jantan' crud_det %}" {% if type == 'Jantan' %}selected{% endif %}>Jantan</option>

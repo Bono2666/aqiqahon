@@ -83,7 +83,7 @@
                                 {% if selected_package.quantity > 0 %}
                                 <div class="col-md-4">
                                     <div class="form-group shadow-none mb-0">
-                                        <label for="type">Jenis Kambing</label>
+                                        <label for="type">Jenis Hewan</label>
                                         <select name="type" id="type" class="form-control form-select-sm" onchange="window.location.href=this.value">
                                             {% if selected_package.male_price > 0 %}
                                             <option value="{% url 'order-package-add' order_id cat pack 'Jantan' 0 %}" {% if type == 'Jantan' %}selected{% endif %}>Jantan</option>

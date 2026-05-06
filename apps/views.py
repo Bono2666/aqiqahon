@@ -32,9 +32,13 @@ from django.template.loader import get_template
 from django.utils.text import Truncator
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from crum import get_current_user
 from apps.notifications import order_notification
 import re
+from xml.sax.saxutils import escape
+from django.contrib.staticfiles import finders
 
 
 @login_required(login_url='/login/')
@@ -4610,13 +4614,19 @@ def claim_print(request, _id):
     pdf_file.setFont('Helvetica-Bold', 11)
 
     # Add logo in the center of the page
-    logo_path = 'https://aqiqahon.sahabataqiqah.co.id/apps/static/img/logo.png'
     logo_width = 60
     logo_height = 60
     page_width = landscape(A4)
     logo_x = (page_width[0] - logo_width) / 2
-    pdf_file.drawImage(logo_path, logo_x, 515,
-                       width=logo_width, height=logo_height)
+    logo_path = finders.find('img/logo.png')
+    if logo_path:
+        pdf_file.drawImage(
+            logo_path,
+            logo_x,
+            515,
+            width=logo_width,
+            height=logo_height,
+        )
 
     # Add title in the center of page width
     title = 'DEBIT NOTE'
@@ -6271,23 +6281,106 @@ def order_package_cs_delete(request, _id, _pack):
     return HttpResponseRedirect(reverse('order-view', args=[_id, '0', '0', '0', '0']))
 
 
-def order_confirm_update(request, _id):
-    order = Order.objects.get(order_id=_id)
-    pack_order = OrderPackage.objects.filter(order_id=_id, package__promo=True)
-    last_package = OrderPackage.objects.filter(order_id=_id).last()
+def _calculate_order_base_total(order_id):
+    total = OrderPackage.objects.filter(order_id=order_id).aggregate(
+        order=Sum('total_price'))
+    total_addon = OrderPackageAddon.objects.filter(order_id=order_id).aggregate(
+        order=Sum('total_price'))
+    return (total['order'] or 0) + (total_addon['order'] or 0)
+
+
+def _apply_order_promo(order, promo_detail=None):
+    order.total_order = _calculate_order_base_total(order.order_id)
+    if promo_detail:
+        order.promo = promo_detail.gift
+        order.promo_nominal = promo_detail.nominal
+        order.total_order -= promo_detail.nominal
+    else:
+        order.promo = None
+        order.promo_nominal = 0
+
+
+def _get_order_promo_options(order):
     min_promo = Promo.objects.filter(promo_limit__gt=0).aggregate(
         min=Min('promo_limit'))
-    # sort desc by promo_limit
-    promos = Promo.objects.filter(promo_limit__gt=0).order_by('-promo_limit')
-    got_promo = False
-    gifts = None
-    if order.total_order >= min_promo['min'] and pack_order.count() > 0:
-        got_promo = True
+    if not min_promo['min']:
+        return False, None
 
-        for i in promos:
-            if order.total_order >= i.promo_limit:
-                gifts = PromoDetail.objects.filter(promo_id=i.promo_id)
-                break
+    pack_order = OrderPackage.objects.filter(order_id=order.order_id, package__promo=True)
+    if not pack_order.exists():
+        return False, None
+
+    eligible_total = order.total_order + order.promo_nominal
+    if eligible_total < min_promo['min']:
+        return False, None
+
+    promos = Promo.objects.filter(promo_limit__gt=0).order_by('-promo_limit')
+    for promo in promos:
+        if eligible_total >= promo.promo_limit:
+            return True, PromoDetail.objects.filter(promo_id=promo.promo_id)
+
+    return False, None
+
+
+def _draw_wrapped_paragraph(pdf_file, text, x, top_y, width, style):
+    if not text:
+        return top_y
+
+    # Normalize any literal "<br/>" coming from DB or previous formatting.
+    # ReportLab Paragraph will treat actual "<br/>" as a tag, but if it is passed through
+    # escape() it may show up as visible text. Converting it to newline keeps behavior consistent.
+    text = str(text).replace('<br/>', '\n').replace('<br />', '\n').replace('<br>', '\n')
+    lines = text.splitlines() or ['']
+    paragraph_text = '<br/>'.join(escape(line) for line in lines)
+    paragraph = Paragraph(paragraph_text, style)
+    _, height = paragraph.wrap(width, 1000)
+    paragraph.drawOn(pdf_file, x, top_y - height)
+    return top_y - height
+
+
+def _paragraph_height(text, width, style):
+    if not text:
+        return 0
+
+    text = str(text).replace('<br/>', '\n').replace('<br />', '\n').replace('<br>', '\n')
+    lines = text.splitlines() or ['']
+    paragraph_text = '<br/>'.join(escape(line) for line in lines)
+    paragraph = Paragraph(paragraph_text, style)
+    _, height = paragraph.wrap(width, 1000)
+    return height
+
+
+def _truncate_text_to_width(text, font_name, font_size, max_width):
+    if not text:
+        return ''
+
+    text = str(text)
+    if stringWidth(text, font_name, font_size) <= max_width:
+        return text
+
+    ellipsis = '...'
+    available_width = max_width - stringWidth(ellipsis, font_name, font_size)
+    trimmed = ''
+    for char in text:
+        if stringWidth(trimmed + char, font_name, font_size) > available_width:
+            break
+        trimmed += char
+
+    return (trimmed.rstrip() + ellipsis) if trimmed else ellipsis
+
+
+def _text_or_empty(value):
+    return '' if value is None else str(value)
+
+
+def _join_nonempty(parts, separator=', '):
+    return separator.join(str(part) for part in parts if part)
+
+
+def order_confirm_update(request, _id):
+    order = Order.objects.get(order_id=_id)
+    last_package = OrderPackage.objects.filter(order_id=_id).last()
+    got_promo, gifts = _get_order_promo_options(order)
 
     if request.POST:
         form = FormOrderConfirmUpdate(request.POST, instance=order)
@@ -6298,19 +6391,7 @@ def order_confirm_update(request, _id):
             order.info_source = request.POST.get('info_source')
             promo_selected = PromoDetail.objects.get(
                 id=request.POST.get('promo')) if request.POST.get('promo') else None
-            if promo_selected:
-                order.promo = promo_selected.gift
-                order.promo_nominal = promo_selected.nominal
-
-                total = OrderPackage.objects.filter(
-                    order_id=_id).aggregate(order=Sum('total_price'))
-                total_addon = OrderPackageAddon.objects.filter(
-                    order_id=_id).aggregate(order=Sum('total_price'))
-                _total_addon = total_addon['order'] if total_addon['order'] else 0
-                order.total_order = total['order'] + _total_addon
-
-                order.total_order -= promo_selected.nominal
-
+            _apply_order_promo(order, promo_selected)
             order.save()
 
             return HttpResponseRedirect(reverse('order-confirm', args=[_id]))
@@ -6523,9 +6604,6 @@ def order_index(request, _branch, _date):
 @role_required(allowed_roles='ORDER')
 def order_view(request, _id, _cat, _pack, _type, _crud):
     order = Order.objects.get(order_id=_id)
-    pack_order = OrderPackage.objects.filter(order_id=_id, package__promo=True)
-    min_promo = Promo.objects.filter(promo_limit__gt=0).aggregate(
-        min=Min('promo_limit'))
     child = OrderChild.objects.filter(order_id=_id)
     package = OrderPackage.objects.filter(order_id=_id)
     leftoverfood = OrderLeftoverFood.objects.filter(order_id=_id)
@@ -6567,17 +6645,7 @@ def order_view(request, _id, _cat, _pack, _type, _crud):
         if idx < _addon_order.count() - 1:
             addon_order += ', '
 
-    # sort desc by promo_limit
-    promos = Promo.objects.filter(promo_limit__gt=0).order_by('-promo_limit')
-    got_promo = False
-    gifts = None
-    if (order.total_order + order.promo_nominal) >= min_promo['min'] and pack_order.count() > 0:
-        got_promo = True
-
-        for i in promos:
-            if (order.total_order + order.promo_nominal) >= i.promo_limit:
-                gifts = PromoDetail.objects.filter(promo_id=i.promo_id)
-                break
+    got_promo, gifts = _get_order_promo_options(order)
 
     if request.POST:
         check = request.GET.get('checks')
@@ -6673,23 +6741,9 @@ def order_view(request, _id, _cat, _pack, _type, _crud):
 @role_required(allowed_roles='ORDER')
 def order_cs_update(request, _id, _cat, _pack, _type):
     order = Order.objects.get(order_id=_id)
-    pack_order = OrderPackage.objects.filter(order_id=_id, package__promo=True)
-    min_promo = Promo.objects.filter(promo_limit__gt=0).aggregate(
-        min=Min('promo_limit'))
     child = OrderChild.objects.filter(order_id=_id)
     package = OrderPackage.objects.filter(order_id=_id)
-
-    # sort desc by promo_limit
-    promos = Promo.objects.filter(promo_limit__gt=0).order_by('-promo_limit')
-    got_promo = False
-    gifts = None
-    if (order.total_order + order.promo_nominal) >= min_promo['min'] and pack_order.count() > 0:
-        got_promo = True
-
-        for i in promos:
-            if (order.total_order + order.promo_nominal) >= i.promo_limit:
-                gifts = PromoDetail.objects.filter(promo_id=i.promo_id)
-                break
+    got_promo, gifts = _get_order_promo_options(order)
 
     if request.POST:
         form = FormOrderCSUpdate(request.POST, instance=order)
@@ -6713,18 +6767,7 @@ def order_cs_update(request, _id, _cat, _pack, _type):
                 '.', '')) if request.POST.get('discount') else 0
             promo_selected = PromoDetail.objects.get(
                 id=request.POST.get('promo')) if request.POST.get('promo') else None
-            if promo_selected:
-                order.promo = promo_selected.gift
-                order.promo_nominal = promo_selected.nominal
-
-                total = OrderPackage.objects.filter(
-                    order_id=_id).aggregate(order=Sum('total_price'))
-                total_addon = OrderPackageAddon.objects.filter(
-                    order_id=_id).aggregate(order=Sum('total_price'))
-                _total_addon = total_addon['order'] if total_addon['order'] else 0
-                order.total_order = total['order'] + _total_addon
-
-                order.total_order -= promo_selected.nominal
+            _apply_order_promo(order, promo_selected)
             order.save()
 
             if order.order_status != 'DRAFT':
@@ -7025,14 +7068,16 @@ def order_invoice(request, _id):
     pdf_file = canvas.Canvas(filename)
 
     # Add logo in the top left corner
-    logo_path = '../../www/aqiqahon/apps/static/img/logo.png'
-    pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
+    logo_path = finders.find('img/logo.png')
+    if logo_path:
+        pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
 
     if order.order_status == 'LUNAS':
         # Add image with transparent 20% in the middle of the page
-        image_path = '../../www/aqiqahon/apps/static/img/lunas.png'
-        pdf_file.drawImage(image_path, 35, 400, width=525,
-                           height=350, mask='auto')
+        image_path = finders.find('img/lunas.png')
+        if image_path:
+            pdf_file.drawImage(image_path, 35, 400, width=525,
+                               height=350, mask='auto')
 
     title = "INVOICE"
     title_width = pdf_file.stringWidth(
@@ -7053,23 +7098,10 @@ def order_invoice(request, _id):
     pdf_file.setFont("Helvetica", 8)
     str_address = order.regional.address if order.regional.address else ''
     address = 'Kantor : ' + str_address
-    y = 708
+    y = 711
     if str_address:
-        split_address = address.split('\n')
-        for i, line in enumerate(split_address):
-            address_width = pdf_file.stringWidth(
-                split_address[i], "Helvetica", 8)
-            rows = int(address_width) // 180
-            for j in range(0, rows):
-                y -= 12
+        y = _draw_wrapped_paragraph(pdf_file, address, 35, y, 180, normalStyle) - 6
 
-        for line in split_address:
-            address_paragraph = Paragraph(line, normalStyle)
-            address_paragraph.wrapOn(pdf_file, 180, 0)
-            address_paragraph.drawOn(pdf_file, 35, y)
-            y -= 10
-
-    y += 1
     str_district = order.regional.district if order.regional.district else ''
     str_city = order.regional.city if order.regional.city else ''
     str_postal_code = order.regional.postal_code if order.regional.postal_code else ''
@@ -7124,27 +7156,21 @@ def order_invoice(request, _id):
                         order.customer_phone2 if order.customer_phone2 else order.customer_phone)
 
     # Add customer address below customer phone
-    y = 641
-    address = order.customer_address.split('\n')
-    for i, line in enumerate(address):
-        address_width = pdf_file.stringWidth(address[i], "Helvetica", 8)
-        rows = int(address_width) // 270
-        for j in range(0, rows):
-            y -= 13
-
-    for line in address:
-        address_paragraph = Paragraph(line, normalStyle)
-        address_paragraph.wrapOn(pdf_file, 270, 0)
-        address_paragraph.drawOn(pdf_file, title_x, y)
-        y -= 10
+    y = _draw_wrapped_paragraph(
+        pdf_file,
+        order.customer_address,
+        title_x,
+        647,
+        270,
+        normalStyle,
+    ) - 6
 
     # Add customer district below customer address
-    y += 1
     pdf_file.drawString(
-        title_x, y, order.customer_district + ', ' + order.customer_city)
+        title_x, y, _join_nonempty([order.customer_district, order.customer_city]))
     # Add customer province below customer district
     y -= 13
-    pdf_file.drawString(title_x, y, order.customer_province)
+    pdf_file.drawString(title_x, y, _text_or_empty(order.customer_province))
 
     y -= 30
     # Add table for order detail
@@ -7173,147 +7199,169 @@ def order_invoice(request, _id):
     center_x = 490 + (65 - total_width) / 2
     pdf_file.drawString(center_x, y + 5, 'Jumlah (Rp)')
 
-    y += 15
+    # Body rows start below the header row (header rect bottom is y)
+    row_top = y
     total = 0
-    for i in range(1, package.count() + 1):
-        y -= 55
-        pdf_file.rect(35, y - 15, 160, 55, stroke=True)
-        pdf_file.setFont("Helvetica", 8)
-        qty = ' - ' + str(package[i - 1].package.quantity) + \
-            ' - ' if package[i - 1].package.quantity > 0 else ''
-        category_clean = re.sub(r'\s*\([^)]*\)',
-                                '', package[i - 1].category.category_name)
-        pdf_file.drawString(
-            40, y + 30, f"{category_clean} - {package[i - 1].package.package_name}{qty}")
-        if package[i - 1].package.quantity > 0:
-            pdf_file.drawString(40, y + 20, 'Hewan ' + package[i - 1].type)
-        pdf_file.rect(195, y - 15, 180, 55, stroke=True)
 
-        cuisines = [package[i - 1].main_cuisine, package[i - 1].sub_cuisine,
-                    package[i - 1].side_cuisine1]
-        row = []
-        str_cuisine = ''
+    wrap_style = styles['Normal']
+    wrap_style.fontSize = 8
+    center_style = ParagraphStyle(
+        'invoice_center_8',
+        parent=wrap_style,
+        alignment=TA_CENTER,
+    )
+    center_style.fontSize = 8
+    right_style = ParagraphStyle(
+        'invoice_right_8',
+        parent=wrap_style,
+        alignment=TA_RIGHT,
+        rightIndent=5,
+    )
+    right_style.fontSize = 8
 
-        for cuisine in cuisines:
-            if cuisine:
-                if package[i - 1].main_cuisine_price > 0 and cuisine == package[i - 1].main_cuisine:
-                    row.append(cuisine + ' (+ Rp ' +
-                               str('{:,}'.format(package[i - 1].main_cuisine_price)).replace(',', '.') + ')')
-                else:
-                    row.append(cuisine)
+    for pkg in package:
+        # Build product cell text (wrapped, no ellipsis)
+        qty_pack = f" - {pkg.package.quantity} - " if pkg.package.quantity and pkg.package.quantity > 0 else ''
+        category_clean = re.sub(r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
+        product_lines = [f"{category_clean} - {pkg.package.package_name}{qty_pack}".strip(' -')]
+        if pkg.package.quantity and pkg.package.quantity > 0:
+            product_lines.append(f"Hewan {pkg.type}")
+        product_text = '\n'.join(product_lines)
 
-        cuisines = [package[i - 1].side_cuisine2, package[i - 1].side_cuisine3,
-                    package[i - 1].side_cuisine4, package[i - 1].side_cuisine5]
+        # Build description cell text (wrapped, no ellipsis)
+        desc_lines = []
+        row_main = []
+        for cuisine in [pkg.main_cuisine, pkg.sub_cuisine, pkg.side_cuisine1]:
+            if not cuisine:
+                continue
+            if pkg.main_cuisine_price and pkg.main_cuisine_price > 0 and cuisine == pkg.main_cuisine:
+                row_main.append(
+                    cuisine + ' (+ Rp ' + str('{:,}'.format(pkg.main_cuisine_price)).replace(',', '.') + ')'
+                )
+            else:
+                row_main.append(cuisine)
+        if row_main:
+            desc_lines.append(' - '.join(row_main))
 
-        for j in range(0, len(row)):
-            str_cuisine += row[j]
-            if j < len(row) - 1 and len(cuisines) > 0:
-                str_cuisine += ' - '
-
-        pdf_file.drawString(200, y + 30, str_cuisine)
-
-        first_row_blank = False
-        if len(row) == 0:
-            first_row_blank = True
-
-        row = []
-        str_cuisine = ''
+        row_sides = [c for c in [pkg.side_cuisine2, pkg.side_cuisine3, pkg.side_cuisine4, pkg.side_cuisine5] if c]
         str_box = ''
+        if row_sides and pkg.package.box and pkg.package.box > 0 and pkg.box_type:
+            str_box = f" - {pkg.package.box} Box ({pkg.box_type})"
+        elif pkg.package.box and pkg.package.box > 0 and pkg.box_type:
+            str_box = f"{pkg.package.box} Box ({pkg.box_type})"
+        if row_sides or str_box:
+            desc_lines.append(' - '.join(row_sides) + str_box)
 
-        for cuisine in cuisines:
-            if cuisine:
-                row.append(cuisine)
+        if pkg.upgrade:
+            desc_lines.append(f"Up: {pkg.upgrade}")
 
-        for j in range(0, len(row)):
-            str_cuisine += row[j]
-            if j < len(row) - 1:
-                str_cuisine += ' - '
+        addons = OrderPackageAddon.objects.filter(order_id=_id, package_id=pkg.package_id)
+        if addons.exists():
+            parts = []
+            for addon in addons:
+                parts.append(f"{addon.equipment.equipment_name} ({addon.quantity})")
+            desc_lines.append('+ ' + ', '.join(parts))
 
-        if str_cuisine != '' and package[i - 1].package.box > 0:
-            str_box = ' - '
-        str_box += str(package[i - 1].package.box) + ' Box (' + package[i -
-                                                                        1].box_type + ')' if package[i - 1].package.box > 0 else ''
+        if pkg.souvenir:
+            desc_lines.append(f"Souvenir: {pkg.souvenir}")
 
-        if first_row_blank:
-            pdf_file.drawString(200, y + 30, str_cuisine + str_box)
-        else:
-            pdf_file.drawString(200, y + 20, str_cuisine + str_box)
+        desc_text = '\n'.join(desc_lines)
 
-        # upgrade
-        if package[i - 1].upgrade:
-            if first_row_blank:
-                pdf_file.drawString(200, y + 20, 'Up: ' +
-                                    package[i - 1].upgrade)
-            else:
-                pdf_file.drawString(200, y + 10, 'Up: ' +
-                                    package[i - 1].upgrade)
+        product_h = _paragraph_height(product_text, 150, wrap_style)
+        desc_h = _paragraph_height(desc_text, 170, wrap_style)
 
-        # Addon equipment
-        addons = OrderPackageAddon.objects.filter(
-            order_id=_id, package_id=package[i - 1].package_id)
-        str_addon = '+ ' if addons.count() > 0 else ''
-        for j in range(0, addons.count()):
-            str_addon += addons[j].equipment.equipment_name + \
-                ' (' + str(addons[j].quantity) + ')'
-            if j < addons.count() - 1:
-                str_addon += ', '
-        if first_row_blank:
-            pdf_file.drawString(200, y + 10, str_addon)
-        else:
-            pdf_file.drawString(200, y, str_addon)
+        padding_top = 2
+        padding_bottom = 8
+        min_row_height = 55
+        row_height = max(min_row_height, max(product_h, desc_h) + padding_top + padding_bottom)
 
-        # Souvenir
-        if package[i - 1].souvenir:
-            if first_row_blank:
-                pdf_file.drawString(
-                    200, y, 'Souvenir: ' + package[i - 1].souvenir)
-            else:
-                pdf_file.drawString(
-                    200, y - 10, 'Souvenir: ' + package[i - 1].souvenir)
+        row_bottom = row_top - row_height
+        pdf_file.rect(35, row_bottom, 160, row_height, stroke=True)
+        pdf_file.rect(195, row_bottom, 180, row_height, stroke=True)
+        pdf_file.rect(375, row_bottom, 30, row_height, stroke=True)
+        pdf_file.rect(405, row_bottom, 85, row_height, stroke=True)
+        pdf_file.rect(490, row_bottom, 65, row_height, stroke=True)
 
-        pdf_file.rect(375, y - 15, 30, 55, stroke=True)
-        pdf_file.setFont("Helvetica", 8)
-        # Calculate the width of the string 'quantity'
-        quantity_width = pdf_file.stringWidth(
-            str(package[i - 1].quantity), "Helvetica", 8)
-        # Calculate the center position of the rectangle
-        center_x = 375 + (30 - quantity_width) / 2
-        pdf_file.drawString(
-            center_x, y + 30, str(package[i - 1].quantity))
-        pdf_file.rect(405, y - 15, 85, 55, stroke=True)
-        pdf_file.drawString(
-            410, y + 30, "{:,}".format(package[i - 1].unit_price))
-        pdf_file.rect(490, y - 15, 65, 55, stroke=True)
-        total_price = package[i - 1].unit_price * package[i - 1].quantity
-        total += total_price
-        total_price_str = "{:,}".format(total_price)
-        total_price_width = pdf_file.stringWidth(
-            total_price_str, "Helvetica", 8)
-        pdf_file.drawString(490 + 65 - total_price_width -
-                            5, y + 30, total_price_str)
+        _draw_wrapped_paragraph(pdf_file, product_text, 40, row_top - padding_top, 150, wrap_style)
+        _draw_wrapped_paragraph(pdf_file, desc_text, 200, row_top - padding_top, 170, wrap_style)
 
-        # Draw total upgrade price
-        if package[i - 1].upgrade:
-            upgrade_price = package[i - 1].extra_price
+        # Place Qty/Harga/Jumlah using Paragraph so their first visible line
+        # aligns with the first line of product/description content.
+        top_y = row_top - padding_top
+
+        _draw_wrapped_paragraph(
+            pdf_file, str(pkg.quantity), 375, top_y, 30, center_style
+        )
+        _draw_wrapped_paragraph(
+            pdf_file, "{:,}".format(pkg.unit_price), 405, top_y, 85, right_style
+        )
+
+        base_total = pkg.unit_price * pkg.quantity
+        total += base_total
+        base_total_str = "{:,}".format(base_total)
+
+        # Align "Up: ..." costs with the paragraph line where "Up:" begins.
+        # We do this by counting wrapped lines of the description prefix.
+        def _desc_wrapped_line_count(prefix_lines):
+            if not prefix_lines:
+                return 0
+            prefix_text = '<br/>'.join(escape(line) for line in prefix_lines if line)
+            p = Paragraph(prefix_text, wrap_style)
+            try:
+                p.wrap(170, 1000)
+                blPara = getattr(p, 'blPara', None)
+                if blPara and hasattr(blPara, 'lines'):
+                    return len(blPara.lines)
+            except Exception:
+                pass
+            return 0
+
+        # Build multi-line amounts for the "Jumlah" column.
+        money_lines = [base_total_str]  # line 0
+
+        up_line_idx = None
+        addon_line_idx = None
+        for idx, line in enumerate(desc_lines):
+            if line.startswith('Up:') and up_line_idx is None:
+                up_line_idx = idx
+            if line.startswith('+ ') and addon_line_idx is None:
+                addon_line_idx = idx
+
+        if pkg.upgrade and up_line_idx is not None:
+            upgrade_price = pkg.extra_price
             total += upgrade_price
-            total_price_str = "{:,}".format(upgrade_price)
-            total_price_width = pdf_file.stringWidth(
-                total_price_str, "Helvetica", 8)
-            pdf_file.drawString(490 + 65 - total_price_width -
-                                5, y + 10, total_price_str)
+            up_str = "{:,}".format(upgrade_price)
 
-        # Draw total addon price
-        if addons.count() > 0:
+            lines_before_up = _desc_wrapped_line_count(desc_lines[:up_line_idx])
+            # Avoid overlapping line 0 with base total.
+            target_line = lines_before_up if lines_before_up > 0 else 1
+            while len(money_lines) <= target_line:
+                money_lines.append('')
+            money_lines[target_line] = up_str
+
+        if addons.exists() and addon_line_idx is not None:
             total_addon = 0
-            for j in range(0, addons.count()):
-                total_price = addons[j].unit_price * addons[j].quantity
-                total_addon += total_price
-                total += total_price
-            total_price_str = "{:,}".format(total_addon)
-            total_price_width = pdf_file.stringWidth(
-                total_price_str, "Helvetica", 8)
-            pdf_file.drawString(490 + 65 - total_price_width -
-                                5, y, total_price_str)
+            for addon in addons:
+                total_addon += addon.unit_price * addon.quantity
+            total += total_addon
+            add_str = "{:,}".format(total_addon)
+
+            lines_before_addon = _desc_wrapped_line_count(desc_lines[:addon_line_idx])
+            target_line = lines_before_addon if lines_before_addon > 0 else 1
+            while len(money_lines) <= target_line:
+                money_lines.append('')
+            money_lines[target_line] = add_str
+
+        jumlah_text = '\n'.join(money_lines)
+        _draw_wrapped_paragraph(
+            pdf_file, jumlah_text, 490, top_y, 65, right_style
+        )
+
+        row_top = row_bottom
+
+    # Maintain the same vertical offset as the original fixed-height table,
+    # so subsequent summary rows (Sub Total / Diskon / DP) don't leave a gap.
+    y = row_top + 15
 
     # Promo
     pdf_file.setFont("Helvetica-Bold", 8)
@@ -7391,21 +7439,18 @@ def order_invoice(request, _id):
         105, y - 27, time_arrival_minus_one_hour.strftime('%H:%M'))
     pdf_file.drawString(35, y - 39, 'Jam Acara')
     pdf_file.drawString(95, y - 39, ':')
-    pdf_file.drawString(105, y - 39, order.time_arrival)
+    pdf_file.drawString(105, y - 39, _text_or_empty(order.time_arrival))
     pdf_file.drawString(35, y - 51, 'Catatan')
     pdf_file.drawString(95, y - 51, ':')
 
-    notes = order.order_note.split('\n') if order.order_note else ''
-    for i, line in enumerate(notes):
-        note_width = pdf_file.stringWidth(notes[i], "Helvetica", 8)
-        rows = int(note_width) // 200
-        for j in range(0, rows):
-            y -= 13
-
-        notes_paragraph = Paragraph(line, normalStyle)
-        notes_paragraph.wrapOn(pdf_file, 200, 100)
-        notes_paragraph.drawOn(pdf_file, 105, y - 55)
-        y -= 10
+    y = _draw_wrapped_paragraph(
+        pdf_file,
+        order.order_note,
+        105,
+        y - 43,
+        200,
+        normalStyle,
+    )
 
     y2 -= 30
     pdf_file.setFont("Helvetica-Bold", 8)
@@ -7454,7 +7499,7 @@ def order_invoice(request, _id):
     pdf_file.drawString(35, y, 'Sumber Informasi?')
     y -= 12
     pdf_file.setFont("Helvetica", 8)
-    pdf_file.drawString(35, y, order.info_source)
+    pdf_file.drawString(35, y, _text_or_empty(order.info_source))
 
     y -= 30
     pdf_file.setFont("Helvetica-Bold", 8)
@@ -7468,7 +7513,7 @@ def order_invoice(request, _id):
     pdf_file.drawString(
         35, y, 'Pembayaran dapat dilakukan melalui transfer ke rekening :')
     y -= 15
-    bank = region.bank_account.split('\n')
+    bank = _text_or_empty(region.bank_account).split('\n') if region.bank_account else []
     for line in bank:
         bank_paragraph = Paragraph(line, normalStyle)
         bank_paragraph.wrapOn(pdf_file, 200, 100)
@@ -7519,14 +7564,16 @@ def order_bap(request, _id):
     pdf_file = canvas.Canvas(filename)
 
     # Add logo in the top center
-    logo_path = '../../www/aqiqahon/apps/static/img/logo.png'
-    pdf_file.drawImage(logo_path, 260, 745, width=70, height=61)
+    logo_path = finders.find('img/logo.png')
+    if logo_path:
+        pdf_file.drawImage(logo_path, 260, 745, width=70, height=61)
 
     if order.order_status == 'LUNAS':
         # Add image with transparent 20% in the middle of the page
-        image_path = '../../www/aqiqahon/apps/static/img/lunas.png'
-        pdf_file.drawImage(image_path, 35, 400, width=525,
-                           height=350, mask='auto')
+        image_path = finders.find('img/lunas.png')
+        if image_path:
+            pdf_file.drawImage(image_path, 35, 400, width=525,
+                               height=350, mask='auto')
 
     y = 725
     title = "SURAT JALAN SAHABAT AQIQAH"
@@ -7557,21 +7604,29 @@ def order_bap(request, _id):
     pdf_file.drawString(35, y, 'Alamat')
     pdf_file.drawString(135, y, ':')
 
-    y += 1
-    address = order.customer_address.split('\n')
-    for i, line in enumerate(address):
-        address_width = pdf_file.stringWidth(address[i], "Helvetica-Bold", 8)
-        rows = int(address_width) // 232
-        for j in range(0, rows):
-            y -= 13
+    y = _draw_wrapped_paragraph(
+        pdf_file,
+        order.customer_address,
+        145,
+        y + 8,
+        232,
+        bold_style,
+    ) - 6
 
-    for line in address:
-        address_paragraph = Paragraph(line, bold_style)
-        address_paragraph.wrapOn(pdf_file, 232, 100)
-        address_paragraph.drawOn(pdf_file, 145, y - 4)
-        y -= 10
+    pdf_file.setFont("Helvetica", 8)
+    pdf_file.drawString(35, y, 'Kecamatan')
+    pdf_file.drawString(135, y, ':')
+    pdf_file.drawString(145, y, _text_or_empty(order.customer_district))
+    y -= 12
+    pdf_file.drawString(35, y, 'Kota/Kabupaten')
+    pdf_file.drawString(135, y, ':')
+    pdf_file.drawString(145, y, _text_or_empty(order.customer_city))
+    y -= 12
+    pdf_file.drawString(35, y, 'Propinsi')
+    pdf_file.drawString(135, y, ':')
+    pdf_file.drawString(145, y, _text_or_empty(order.customer_province))
+    y -= 12
 
-    y -= 2
     pdf_file.drawString(35, y, 'Tanggal Pengiriman')
     pdf_file.drawString(135, y, ':')
     pdf_file.drawString(145, y, order.delivery_date.strftime(
@@ -7625,147 +7680,142 @@ def order_bap(request, _id):
     center_x = 490 + (65 - total_width) / 2
     pdf_file.drawString(center_x, y + 5, 'Jumlah (Rp)')
 
-    y += 15
+    row_top = y
     total = 0
-    for i in range(1, package.count() + 1):
-        y -= 55
-        pdf_file.rect(35, y - 15, 160, 55, stroke=True)
-        pdf_file.setFont("Helvetica", 8)
-        qty = ' - ' + str(package[i - 1].package.quantity) + \
-            ' - ' if package[i - 1].package.quantity > 0 else ''
-        category_clean = re.sub(r'\s*\([^)]*\)',
-                                '', package[i - 1].category.category_name)
-        pdf_file.drawString(
-            40, y + 30, f"{category_clean} - {package[i - 1].package.package_name}{qty}")
-        if package[i - 1].package.quantity > 0:
-            pdf_file.drawString(40, y + 20, 'Hewan ' + package[i - 1].type)
-        pdf_file.rect(195, y - 15, 180, 55, stroke=True)
 
-        cuisines = [package[i - 1].main_cuisine, package[i - 1].sub_cuisine,
-                    package[i - 1].side_cuisine1]
-        row = []
-        str_cuisine = ''
+    wrap_style = styles['Normal']
+    wrap_style.fontSize = 8
+    wrap_style.fontName = 'Helvetica'
+    center_style = ParagraphStyle(
+        'bap_center_8',
+        parent=wrap_style,
+        alignment=TA_CENTER,
+    )
+    right_style = ParagraphStyle(
+        'bap_right_8',
+        parent=wrap_style,
+        alignment=TA_RIGHT,
+        rightIndent=5,
+    )
 
-        for cuisine in cuisines:
-            if cuisine:
-                if package[i - 1].main_cuisine_price > 0 and cuisine == package[i - 1].main_cuisine:
-                    row.append(cuisine + ' (+ Rp ' +
-                               str('{:,}'.format(package[i - 1].main_cuisine_price)).replace(',', '.') + ')')
-                else:
-                    row.append(cuisine)
+    for pkg in package:
+        qty_pack = f" - {pkg.package.quantity} - " if pkg.package.quantity and pkg.package.quantity > 0 else ''
+        category_clean = re.sub(r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
+        product_lines = [f"{category_clean} - {pkg.package.package_name}{qty_pack}".strip(' -')]
+        if pkg.package.quantity and pkg.package.quantity > 0:
+            product_lines.append(f"Hewan {pkg.type}")
+        product_text = '\n'.join(product_lines)
 
-        cuisines = [package[i - 1].side_cuisine2, package[i - 1].side_cuisine3,
-                    package[i - 1].side_cuisine4, package[i - 1].side_cuisine5]
+        desc_lines = []
+        row_main = []
+        for cuisine in [pkg.main_cuisine, pkg.sub_cuisine, pkg.side_cuisine1]:
+            if not cuisine:
+                continue
+            if pkg.main_cuisine_price and pkg.main_cuisine_price > 0 and cuisine == pkg.main_cuisine:
+                row_main.append(
+                    cuisine + ' (+ Rp ' + str('{:,}'.format(pkg.main_cuisine_price)).replace(',', '.') + ')'
+                )
+            else:
+                row_main.append(cuisine)
+        if row_main:
+            desc_lines.append(' - '.join(row_main))
 
-        for j in range(0, len(row)):
-            str_cuisine += row[j]
-            if j < len(row) - 1 and len(cuisines) > 0:
-                str_cuisine += ' - '
-
-        pdf_file.drawString(200, y + 30, str_cuisine)
-
-        first_row_blank = False
-        if len(row) == 0:
-            first_row_blank = True
-
-        row = []
-        str_cuisine = ''
+        row_sides = [c for c in [pkg.side_cuisine2, pkg.side_cuisine3, pkg.side_cuisine4, pkg.side_cuisine5] if c]
         str_box = ''
+        if row_sides and pkg.package.box and pkg.package.box > 0 and pkg.box_type:
+            str_box = f" - {pkg.package.box} Box ({pkg.box_type})"
+        elif pkg.package.box and pkg.package.box > 0 and pkg.box_type:
+            str_box = f"{pkg.package.box} Box ({pkg.box_type})"
+        if row_sides or str_box:
+            desc_lines.append(' - '.join(row_sides) + str_box)
 
-        for cuisine in cuisines:
-            if cuisine:
-                row.append(cuisine)
+        if pkg.upgrade:
+            desc_lines.append(f"Up: {pkg.upgrade}")
 
-        for j in range(0, len(row)):
-            str_cuisine += row[j]
-            if j < len(row) - 1:
-                str_cuisine += ' - '
+        addons = OrderPackageAddon.objects.filter(order_id=_id, package_id=pkg.package_id)
+        if addons.exists():
+            parts = []
+            for addon in addons:
+                parts.append(f"{addon.equipment.equipment_name} ({addon.quantity})")
+            desc_lines.append('+ ' + ', '.join(parts))
 
-        if str_cuisine != '' and package[i - 1].package.box > 0:
-            str_box = ' - '
-        str_box += str(package[i - 1].package.box) + ' Box (' + package[i -
-                                                                        1].box_type + ')' if package[i - 1].package.box > 0 else ''
+        if pkg.souvenir:
+            desc_lines.append(f"Souvenir: {pkg.souvenir}")
 
-        if first_row_blank:
-            pdf_file.drawString(200, y + 30, str_cuisine + str_box)
-        else:
-            pdf_file.drawString(200, y + 20, str_cuisine + str_box)
+        desc_text = '\n'.join(desc_lines)
 
-        # upgrade
-        if package[i - 1].upgrade:
-            if first_row_blank:
-                pdf_file.drawString(200, y + 20, 'Up: ' +
-                                    package[i - 1].upgrade)
-            else:
-                pdf_file.drawString(200, y + 10, 'Up: ' +
-                                    package[i - 1].upgrade)
+        product_h = _paragraph_height(product_text, 150, wrap_style)
+        desc_h = _paragraph_height(desc_text, 170, wrap_style)
 
-        # Addon equipment
-        addons = OrderPackageAddon.objects.filter(
-            order_id=_id, package_id=package[i - 1].package_id)
-        str_addon = '+ ' if addons.count() > 0 else ''
-        for j in range(0, addons.count()):
-            str_addon += addons[j].equipment.equipment_name + \
-                ' (' + str(addons[j].quantity) + ')'
-            if j < addons.count() - 1:
-                str_addon += ', '
-        if first_row_blank:
-            pdf_file.drawString(200, y + 10, str_addon)
-        else:
-            pdf_file.drawString(200, y, str_addon)
+        padding_top = 2
+        padding_bottom = 8
+        min_row_height = 55
+        row_height = max(min_row_height, max(product_h, desc_h) + padding_top + padding_bottom)
 
-        # Souvenir
-        if package[i - 1].souvenir:
-            if first_row_blank:
-                pdf_file.drawString(
-                    200, y, 'Souvenir: ' + package[i - 1].souvenir)
-            else:
-                pdf_file.drawString(
-                    200, y - 10, 'Souvenir: ' + package[i - 1].souvenir)
+        row_bottom = row_top - row_height
+        pdf_file.rect(35, row_bottom, 160, row_height, stroke=True)
+        pdf_file.rect(195, row_bottom, 180, row_height, stroke=True)
+        pdf_file.rect(375, row_bottom, 30, row_height, stroke=True)
+        pdf_file.rect(405, row_bottom, 85, row_height, stroke=True)
+        pdf_file.rect(490, row_bottom, 65, row_height, stroke=True)
 
-        pdf_file.rect(375, y - 15, 30, 55, stroke=True)
-        pdf_file.setFont("Helvetica", 8)
-        # Calculate the width of the string 'quantity'
-        quantity_width = pdf_file.stringWidth(
-            str(package[i - 1].quantity), "Helvetica", 8)
-        # Calculate the center position of the rectangle
-        center_x = 375 + (30 - quantity_width) / 2
-        pdf_file.drawString(
-            center_x, y + 30, str(package[i - 1].quantity))
-        pdf_file.rect(405, y - 15, 85, 55, stroke=True)
-        pdf_file.drawString(
-            410, y + 30, "{:,}".format(package[i - 1].unit_price))
-        pdf_file.rect(490, y - 15, 65, 55, stroke=True)
-        total_price = package[i - 1].unit_price * package[i - 1].quantity
-        total += total_price
-        total_price_str = "{:,}".format(total_price)
-        total_price_width = pdf_file.stringWidth(
-            total_price_str, "Helvetica", 8)
-        pdf_file.drawString(490 + 65 - total_price_width -
-                            5, y + 30, total_price_str)
+        _draw_wrapped_paragraph(pdf_file, product_text, 40, row_top - padding_top, 150, wrap_style)
+        _draw_wrapped_paragraph(pdf_file, desc_text, 200, row_top - padding_top, 170, wrap_style)
 
-        # Draw total upgrade price
-        if package[i - 1].upgrade:
-            upgrade_price = package[i - 1].extra_price
+        top_y = row_top - padding_top
+        _draw_wrapped_paragraph(pdf_file, str(pkg.quantity), 375, top_y, 30, center_style)
+        _draw_wrapped_paragraph(pdf_file, "{:,}".format(pkg.unit_price), 405, top_y, 85, right_style)
+
+        base_total = pkg.unit_price * pkg.quantity
+        total += base_total
+        money_lines = ["{:,}".format(base_total)]
+
+        def _desc_wrapped_line_count(prefix_lines):
+            if not prefix_lines:
+                return 0
+            prefix_text = '<br/>'.join(escape(line) for line in prefix_lines if line)
+            p = Paragraph(prefix_text, wrap_style)
+            try:
+                p.wrap(170, 1000)
+                blPara = getattr(p, 'blPara', None)
+                if blPara and hasattr(blPara, 'lines'):
+                    return len(blPara.lines)
+            except Exception:
+                pass
+            return 0
+
+        up_line_idx = None
+        addon_line_idx = None
+        for idx, line in enumerate(desc_lines):
+            if line.startswith('Up:') and up_line_idx is None:
+                up_line_idx = idx
+            if line.startswith('+ ') and addon_line_idx is None:
+                addon_line_idx = idx
+
+        if pkg.upgrade and up_line_idx is not None:
+            upgrade_price = pkg.extra_price
             total += upgrade_price
-            total_price_str = "{:,}".format(upgrade_price)
-            total_price_width = pdf_file.stringWidth(
-                total_price_str, "Helvetica", 8)
-            pdf_file.drawString(490 + 65 - total_price_width -
-                                5, y + 10, total_price_str)
+            target_line = _desc_wrapped_line_count(desc_lines[:up_line_idx])
+            target_line = target_line if target_line > 0 else 1
+            while len(money_lines) <= target_line:
+                money_lines.append('')
+            money_lines[target_line] = "{:,}".format(upgrade_price)
 
-        # Draw total addon price
-        if addons.count() > 0:
+        if addons.exists() and addon_line_idx is not None:
             total_addon = 0
-            for j in range(0, addons.count()):
-                total_price = addons[j].unit_price * addons[j].quantity
-                total_addon += total_price
-                total += total_price
-            total_price_str = "{:,}".format(total_addon)
-            total_price_width = pdf_file.stringWidth(
-                total_price_str, "Helvetica", 8)
-            pdf_file.drawString(490 + 65 - total_price_width -
-                                5, y, total_price_str)
+            for addon in addons:
+                total_addon += addon.unit_price * addon.quantity
+            total += total_addon
+            target_line = _desc_wrapped_line_count(desc_lines[:addon_line_idx])
+            target_line = target_line if target_line > 0 else 1
+            while len(money_lines) <= target_line:
+                money_lines.append('')
+            money_lines[target_line] = "{:,}".format(total_addon)
+
+        _draw_wrapped_paragraph(pdf_file, '\n'.join(money_lines), 490, top_y, 65, right_style)
+        row_top = row_bottom
+
+    y = row_top + 15
 
     # Promo
     pdf_file.setFont("Helvetica-Bold", 8)

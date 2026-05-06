@@ -1705,7 +1705,7 @@ class OrderPackage(models.Model):
     bag = models.CharField(max_length=50, null=True)
     beverage = models.CharField(max_length=50, null=True)
     souvenir = models.CharField(max_length=50, null=True, default='')
-    upgrade = models.CharField(max_length=50, null=True)
+    upgrade = models.TextField(null=True, blank=True)
     extra_price = models.DecimalField(
         max_digits=12, decimal_places=0, default=0)
     unit_price = models.DecimalField(

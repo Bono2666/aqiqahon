@@ -3,6 +3,7 @@ from pathlib import Path
 import pymysql
 import dj_database_url
 from datetime import timedelta
+from django.core.exceptions import ImproperlyConfigured
 pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -13,11 +14,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY', 'django-insecure-_!6+r_5f(%pb6hbz3onm@0*j+(frmx1p@_w2gd!vef&mpwymik')
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+if not DEBUG and not SECRET_KEY:
+    raise ImproperlyConfigured("SECRET_KEY must be set when DEBUG=False")
+
+if DEBUG and not SECRET_KEY:
+    SECRET_KEY = 'django-insecure-_!6+r_5f(%pb6hbz3onm@0*j+(frmx1p@_w2gd!vef&mpwymik'
 
 ALLOWED_HOSTS = os.environ.get(
     'ALLOWED_HOSTS', 'localhost,192.168.0.13,127.0.0.1').split(',')
@@ -47,8 +52,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'crum.CurrentRequestUserMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django_auto_logout.middleware.auto_logout',
 ]
 
@@ -86,9 +89,9 @@ DATABASES = {
         'NAME': 'aqiqahon',
         'USER': 'root',
         'PASSWORD': '',
-        # 'NAME': 'u8365310_aqiqahon',
-        # 'USER': 'u8365310_aqiqahon',
-        # 'PASSWORD': 'tn,(s0LM_%}0',
+        # 'NAME': 'sahaba89_aqiqahon',
+        # 'USER': 'sahaba89_aqiqahon',
+        # 'PASSWORD': 'V4UkBT,Hc]O8r,](',
         'HOST': 'localhost',
         'PORT': '3306',
     }
@@ -134,7 +137,7 @@ USE_L10N = True
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'apps/staticfiles/')
 STATICFILES_DIRS = os.path.join(BASE_DIR, 'apps/static/'),
-STATIC_URL = 'apps/static/'
+STATIC_URL = '/apps/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -153,11 +156,11 @@ AUTO_LOGOUT = {
 }
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'mail.ksisolusi.com'
-EMAIL_PORT = 465
-EMAIL_HOST_USER = 'abc_is@ksisolusi.com'
-EMAIL_HOST_NAME = 'ABC Integrated System'
-EMAIL_HOST_PASSWORD = 'E;$q%YR%c;P='
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'mail.ksisolusi.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'abc_is@ksisolusi.com')
+EMAIL_HOST_NAME = os.environ.get('EMAIL_HOST_NAME', 'ABC Integrated System')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'E;$q%YR%c;P=')
 EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
 

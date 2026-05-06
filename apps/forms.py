@@ -1257,7 +1257,7 @@ class FormOrderChild(ModelForm):
 
 class FormOrderCSChild(ModelForm):
     def __init__(self, *args, **kwargs):
-        super(FormOrderChild, self).__init__(*args, **kwargs)
+        super(FormOrderCSChild, self).__init__(*args, **kwargs)
         self.label_suffix = ''
         self.fields['child_name'].label = 'Nama Anak Yang Diaqiqahkan'
         self.fields['child_name'].widget = forms.TextInput(

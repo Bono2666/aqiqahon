@@ -6465,7 +6465,7 @@ def order_confirm(request, _id):
 
 def order_submit(request, _id):
     order = Order.objects.get(order_id=_id)
-    order.order_status = 'DRAFT'
+    order.order_status = 'DRAFT' if order.order_status == 'PENDING' else order.order_status
     order.save()
 
     link_form = AreaSales.objects.get(area_id=order.regional_id).form

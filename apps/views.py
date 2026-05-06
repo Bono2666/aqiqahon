@@ -6306,7 +6306,8 @@ def _get_order_promo_options(order):
     if not min_promo['min']:
         return False, None
 
-    pack_order = OrderPackage.objects.filter(order_id=order.order_id, package__promo=True)
+    pack_order = OrderPackage.objects.filter(
+        order_id=order.order_id, package__promo=True)
     if not pack_order.exists():
         return False, None
 
@@ -6329,7 +6330,8 @@ def _draw_wrapped_paragraph(pdf_file, text, x, top_y, width, style):
     # Normalize any literal "<br/>" coming from DB or previous formatting.
     # ReportLab Paragraph will treat actual "<br/>" as a tag, but if it is passed through
     # escape() it may show up as visible text. Converting it to newline keeps behavior consistent.
-    text = str(text).replace('<br/>', '\n').replace('<br />', '\n').replace('<br>', '\n')
+    text = str(text).replace(
+        '<br/>', '\n').replace('<br />', '\n').replace('<br>', '\n')
     lines = text.splitlines() or ['']
     paragraph_text = '<br/>'.join(escape(line) for line in lines)
     paragraph = Paragraph(paragraph_text, style)
@@ -6342,7 +6344,8 @@ def _paragraph_height(text, width, style):
     if not text:
         return 0
 
-    text = str(text).replace('<br/>', '\n').replace('<br />', '\n').replace('<br>', '\n')
+    text = str(text).replace(
+        '<br/>', '\n').replace('<br />', '\n').replace('<br>', '\n')
     lines = text.splitlines() or ['']
     paragraph_text = '<br/>'.join(escape(line) for line in lines)
     paragraph = Paragraph(paragraph_text, style)
@@ -7068,13 +7071,13 @@ def order_invoice(request, _id):
     pdf_file = canvas.Canvas(filename)
 
     # Add logo in the top left corner
-    logo_path = finders.find('img/logo.png')
+    logo_path = '../www/aqiqahon/apps/static/img/logo.png'
     if logo_path:
         pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
 
     if order.order_status == 'LUNAS':
         # Add image with transparent 20% in the middle of the page
-        image_path = finders.find('img/lunas.png')
+        image_path = '../www/aqiqahon/apps/static/img/lunas.png'
         if image_path:
             pdf_file.drawImage(image_path, 35, 400, width=525,
                                height=350, mask='auto')
@@ -7100,7 +7103,8 @@ def order_invoice(request, _id):
     address = 'Kantor : ' + str_address
     y = 711
     if str_address:
-        y = _draw_wrapped_paragraph(pdf_file, address, 35, y, 180, normalStyle) - 6
+        y = _draw_wrapped_paragraph(
+            pdf_file, address, 35, y, 180, normalStyle) - 6
 
     str_district = order.regional.district if order.regional.district else ''
     str_city = order.regional.city if order.regional.city else ''
@@ -7222,8 +7226,10 @@ def order_invoice(request, _id):
     for pkg in package:
         # Build product cell text (wrapped, no ellipsis)
         qty_pack = f" - {pkg.package.quantity} - " if pkg.package.quantity and pkg.package.quantity > 0 else ''
-        category_clean = re.sub(r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
-        product_lines = [f"{category_clean} - {pkg.package.package_name}{qty_pack}".strip(' -')]
+        category_clean = re.sub(
+            r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
+        product_lines = [
+            f"{category_clean} - {pkg.package.package_name}{qty_pack}".strip(' -')]
         if pkg.package.quantity and pkg.package.quantity > 0:
             product_lines.append(f"Hewan {pkg.type}")
         product_text = '\n'.join(product_lines)
@@ -7236,14 +7242,17 @@ def order_invoice(request, _id):
                 continue
             if pkg.main_cuisine_price and pkg.main_cuisine_price > 0 and cuisine == pkg.main_cuisine:
                 row_main.append(
-                    cuisine + ' (+ Rp ' + str('{:,}'.format(pkg.main_cuisine_price)).replace(',', '.') + ')'
+                    cuisine +
+                    ' (+ Rp ' + str('{:,}'.format(pkg.main_cuisine_price)
+                                    ).replace(',', '.') + ')'
                 )
             else:
                 row_main.append(cuisine)
         if row_main:
             desc_lines.append(' - '.join(row_main))
 
-        row_sides = [c for c in [pkg.side_cuisine2, pkg.side_cuisine3, pkg.side_cuisine4, pkg.side_cuisine5] if c]
+        row_sides = [c for c in [pkg.side_cuisine2, pkg.side_cuisine3,
+                                 pkg.side_cuisine4, pkg.side_cuisine5] if c]
         str_box = ''
         if row_sides and pkg.package.box and pkg.package.box > 0 and pkg.box_type:
             str_box = f" - {pkg.package.box} Box ({pkg.box_type})"
@@ -7255,11 +7264,13 @@ def order_invoice(request, _id):
         if pkg.upgrade:
             desc_lines.append(f"Up: {pkg.upgrade}")
 
-        addons = OrderPackageAddon.objects.filter(order_id=_id, package_id=pkg.package_id)
+        addons = OrderPackageAddon.objects.filter(
+            order_id=_id, package_id=pkg.package_id)
         if addons.exists():
             parts = []
             for addon in addons:
-                parts.append(f"{addon.equipment.equipment_name} ({addon.quantity})")
+                parts.append(
+                    f"{addon.equipment.equipment_name} ({addon.quantity})")
             desc_lines.append('+ ' + ', '.join(parts))
 
         if pkg.souvenir:
@@ -7273,7 +7284,8 @@ def order_invoice(request, _id):
         padding_top = 2
         padding_bottom = 8
         min_row_height = 55
-        row_height = max(min_row_height, max(product_h, desc_h) + padding_top + padding_bottom)
+        row_height = max(min_row_height, max(
+            product_h, desc_h) + padding_top + padding_bottom)
 
         row_bottom = row_top - row_height
         pdf_file.rect(35, row_bottom, 160, row_height, stroke=True)
@@ -7282,8 +7294,10 @@ def order_invoice(request, _id):
         pdf_file.rect(405, row_bottom, 85, row_height, stroke=True)
         pdf_file.rect(490, row_bottom, 65, row_height, stroke=True)
 
-        _draw_wrapped_paragraph(pdf_file, product_text, 40, row_top - padding_top, 150, wrap_style)
-        _draw_wrapped_paragraph(pdf_file, desc_text, 200, row_top - padding_top, 170, wrap_style)
+        _draw_wrapped_paragraph(pdf_file, product_text,
+                                40, row_top - padding_top, 150, wrap_style)
+        _draw_wrapped_paragraph(pdf_file, desc_text, 200,
+                                row_top - padding_top, 170, wrap_style)
 
         # Place Qty/Harga/Jumlah using Paragraph so their first visible line
         # aligns with the first line of product/description content.
@@ -7293,7 +7307,8 @@ def order_invoice(request, _id):
             pdf_file, str(pkg.quantity), 375, top_y, 30, center_style
         )
         _draw_wrapped_paragraph(
-            pdf_file, "{:,}".format(pkg.unit_price), 405, top_y, 85, right_style
+            pdf_file, "{:,}".format(
+                pkg.unit_price), 405, top_y, 85, right_style
         )
 
         base_total = pkg.unit_price * pkg.quantity
@@ -7305,7 +7320,8 @@ def order_invoice(request, _id):
         def _desc_wrapped_line_count(prefix_lines):
             if not prefix_lines:
                 return 0
-            prefix_text = '<br/>'.join(escape(line) for line in prefix_lines if line)
+            prefix_text = '<br/>'.join(escape(line)
+                                       for line in prefix_lines if line)
             p = Paragraph(prefix_text, wrap_style)
             try:
                 p.wrap(170, 1000)
@@ -7332,7 +7348,8 @@ def order_invoice(request, _id):
             total += upgrade_price
             up_str = "{:,}".format(upgrade_price)
 
-            lines_before_up = _desc_wrapped_line_count(desc_lines[:up_line_idx])
+            lines_before_up = _desc_wrapped_line_count(
+                desc_lines[:up_line_idx])
             # Avoid overlapping line 0 with base total.
             target_line = lines_before_up if lines_before_up > 0 else 1
             while len(money_lines) <= target_line:
@@ -7346,7 +7363,8 @@ def order_invoice(request, _id):
             total += total_addon
             add_str = "{:,}".format(total_addon)
 
-            lines_before_addon = _desc_wrapped_line_count(desc_lines[:addon_line_idx])
+            lines_before_addon = _desc_wrapped_line_count(
+                desc_lines[:addon_line_idx])
             target_line = lines_before_addon if lines_before_addon > 0 else 1
             while len(money_lines) <= target_line:
                 money_lines.append('')
@@ -7513,7 +7531,8 @@ def order_invoice(request, _id):
     pdf_file.drawString(
         35, y, 'Pembayaran dapat dilakukan melalui transfer ke rekening :')
     y -= 15
-    bank = _text_or_empty(region.bank_account).split('\n') if region.bank_account else []
+    bank = _text_or_empty(region.bank_account).split(
+        '\n') if region.bank_account else []
     for line in bank:
         bank_paragraph = Paragraph(line, normalStyle)
         bank_paragraph.wrapOn(pdf_file, 200, 100)
@@ -7564,7 +7583,7 @@ def order_bap(request, _id):
     pdf_file = canvas.Canvas(filename)
 
     # Add logo in the top center
-    logo_path = finders.find('img/logo.png')
+    logo_path = '../www/aqiqahon/apps/static/img/logo.png'
     if logo_path:
         pdf_file.drawImage(logo_path, 260, 745, width=70, height=61)
 
@@ -7700,8 +7719,10 @@ def order_bap(request, _id):
 
     for pkg in package:
         qty_pack = f" - {pkg.package.quantity} - " if pkg.package.quantity and pkg.package.quantity > 0 else ''
-        category_clean = re.sub(r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
-        product_lines = [f"{category_clean} - {pkg.package.package_name}{qty_pack}".strip(' -')]
+        category_clean = re.sub(
+            r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
+        product_lines = [
+            f"{category_clean} - {pkg.package.package_name}{qty_pack}".strip(' -')]
         if pkg.package.quantity and pkg.package.quantity > 0:
             product_lines.append(f"Hewan {pkg.type}")
         product_text = '\n'.join(product_lines)
@@ -7713,14 +7734,17 @@ def order_bap(request, _id):
                 continue
             if pkg.main_cuisine_price and pkg.main_cuisine_price > 0 and cuisine == pkg.main_cuisine:
                 row_main.append(
-                    cuisine + ' (+ Rp ' + str('{:,}'.format(pkg.main_cuisine_price)).replace(',', '.') + ')'
+                    cuisine +
+                    ' (+ Rp ' + str('{:,}'.format(pkg.main_cuisine_price)
+                                    ).replace(',', '.') + ')'
                 )
             else:
                 row_main.append(cuisine)
         if row_main:
             desc_lines.append(' - '.join(row_main))
 
-        row_sides = [c for c in [pkg.side_cuisine2, pkg.side_cuisine3, pkg.side_cuisine4, pkg.side_cuisine5] if c]
+        row_sides = [c for c in [pkg.side_cuisine2, pkg.side_cuisine3,
+                                 pkg.side_cuisine4, pkg.side_cuisine5] if c]
         str_box = ''
         if row_sides and pkg.package.box and pkg.package.box > 0 and pkg.box_type:
             str_box = f" - {pkg.package.box} Box ({pkg.box_type})"
@@ -7732,11 +7756,13 @@ def order_bap(request, _id):
         if pkg.upgrade:
             desc_lines.append(f"Up: {pkg.upgrade}")
 
-        addons = OrderPackageAddon.objects.filter(order_id=_id, package_id=pkg.package_id)
+        addons = OrderPackageAddon.objects.filter(
+            order_id=_id, package_id=pkg.package_id)
         if addons.exists():
             parts = []
             for addon in addons:
-                parts.append(f"{addon.equipment.equipment_name} ({addon.quantity})")
+                parts.append(
+                    f"{addon.equipment.equipment_name} ({addon.quantity})")
             desc_lines.append('+ ' + ', '.join(parts))
 
         if pkg.souvenir:
@@ -7750,7 +7776,8 @@ def order_bap(request, _id):
         padding_top = 2
         padding_bottom = 8
         min_row_height = 55
-        row_height = max(min_row_height, max(product_h, desc_h) + padding_top + padding_bottom)
+        row_height = max(min_row_height, max(
+            product_h, desc_h) + padding_top + padding_bottom)
 
         row_bottom = row_top - row_height
         pdf_file.rect(35, row_bottom, 160, row_height, stroke=True)
@@ -7759,12 +7786,16 @@ def order_bap(request, _id):
         pdf_file.rect(405, row_bottom, 85, row_height, stroke=True)
         pdf_file.rect(490, row_bottom, 65, row_height, stroke=True)
 
-        _draw_wrapped_paragraph(pdf_file, product_text, 40, row_top - padding_top, 150, wrap_style)
-        _draw_wrapped_paragraph(pdf_file, desc_text, 200, row_top - padding_top, 170, wrap_style)
+        _draw_wrapped_paragraph(pdf_file, product_text,
+                                40, row_top - padding_top, 150, wrap_style)
+        _draw_wrapped_paragraph(pdf_file, desc_text, 200,
+                                row_top - padding_top, 170, wrap_style)
 
         top_y = row_top - padding_top
-        _draw_wrapped_paragraph(pdf_file, str(pkg.quantity), 375, top_y, 30, center_style)
-        _draw_wrapped_paragraph(pdf_file, "{:,}".format(pkg.unit_price), 405, top_y, 85, right_style)
+        _draw_wrapped_paragraph(pdf_file, str(
+            pkg.quantity), 375, top_y, 30, center_style)
+        _draw_wrapped_paragraph(pdf_file, "{:,}".format(
+            pkg.unit_price), 405, top_y, 85, right_style)
 
         base_total = pkg.unit_price * pkg.quantity
         total += base_total
@@ -7773,7 +7804,8 @@ def order_bap(request, _id):
         def _desc_wrapped_line_count(prefix_lines):
             if not prefix_lines:
                 return 0
-            prefix_text = '<br/>'.join(escape(line) for line in prefix_lines if line)
+            prefix_text = '<br/>'.join(escape(line)
+                                       for line in prefix_lines if line)
             p = Paragraph(prefix_text, wrap_style)
             try:
                 p.wrap(170, 1000)
@@ -7812,7 +7844,8 @@ def order_bap(request, _id):
                 money_lines.append('')
             money_lines[target_line] = "{:,}".format(total_addon)
 
-        _draw_wrapped_paragraph(pdf_file, '\n'.join(money_lines), 490, top_y, 65, right_style)
+        _draw_wrapped_paragraph(pdf_file, '\n'.join(
+            money_lines), 490, top_y, 65, right_style)
         row_top = row_bottom
 
     y = row_top + 15
@@ -7964,7 +7997,7 @@ def order_checklist(request, _id):
 
     for i in range(0, package.count()):
         # Add logo in the top left corner
-        logo_path = '../../www/aqiqahon/apps/static/img/logo.png'
+        logo_path = '../www/aqiqahon/apps/static/img/logo.png'
         pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
 
         title = "CHECKLIST FORM"

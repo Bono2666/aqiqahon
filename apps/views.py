@@ -6397,22 +6397,63 @@ def _validate_delivery_date_not_past(value):
     return None
 
 
-def _paginate_queryset(request, queryset, per_page=25):
+def _paginate_queryset(request, queryset, per_page=25, page_param='page'):
     paginator = Paginator(queryset, per_page)
-    page_number = request.GET.get('page') or 1
+    page_number = request.GET.get(page_param) or 1
     page_obj = paginator.get_page(page_number)
     return page_obj
 
 
-def _get_search_query(request):
-    return request.GET.get('search', '').strip()
+def _get_search_query(request, param='search'):
+    return request.GET.get(param, '').strip()
 
 
-def _get_pagination_query(request):
+def _get_pagination_query(request, page_param='page'):
     query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params.pop(page_param, None)
     query_string = query_params.urlencode()
     return f'{query_string}&' if query_string else ''
+
+
+def _get_cashin_order_popup_context(request, queryset, page_param='order_page', search_param='order_search', per_page=10):
+    order_search_query = _get_search_query(request, search_param)
+    if order_search_query:
+        queryset = queryset.filter(
+            Q(order_id__icontains=order_search_query) |
+            Q(customer_name__icontains=order_search_query)
+        )
+
+    order_page_obj = _paginate_queryset(
+        request,
+        queryset.order_by('-order_id'),
+        per_page=per_page,
+        page_param=page_param,
+    )
+
+    return {
+        'order_popup_data': order_page_obj.object_list,
+        'order_page_obj': order_page_obj,
+        'order_search_query': order_search_query,
+        'order_pagination_query': _get_pagination_query(request, page_param),
+        'open_order_modal': request.GET.get('open_order_modal') == '1',
+    }
+
+
+def _refresh_order_payment_status(order_id):
+    order = Order.objects.get(order_id=order_id)
+    order.down_payment = CashIn.objects.filter(order_id=order_id).aggregate(
+        cashin=Sum('cashin_amount')
+    )['cashin'] if CashIn.objects.filter(order_id=order_id) else 0
+    order.save()
+
+    if order.pending_payment == 0:
+        order.order_status = 'LUNAS'
+    else:
+        if order.down_payment == 0:
+            order.order_status = 'CONFIRMED'
+        else:
+            order.order_status = 'DP'
+    order.save()
 
 
 def order_confirm_update(request, _id):
@@ -6986,10 +7027,11 @@ def cashin_index(request):
 @login_required(login_url='/login/')
 @role_required(allowed_roles='CASH-IN')
 def cashin_add(request, _id, _msg):
-    orders = Order.objects.filter(order_status__in=['DP', 'CONFIRMED'], regional_id__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-order_id')
+    orders = Order.objects.filter(order_status__in=['DP', 'CONFIRMED'], pending_payment__gt=0, regional_id__in=AreaUser.objects.filter(
+        user_id=request.user.user_id).values_list('area_id', flat=True))
     order = Order.objects.get(order_id=_id) if Order.objects.filter(
         order_id=_id) else None
+    popup_context = _get_cashin_order_popup_context(request, orders)
 
     if request.POST:
         form = FormCashIn(request.POST, request.FILES)
@@ -7004,7 +7046,7 @@ def cashin_add(request, _id, _msg):
             if not settings.DEBUG:
                 cash_in = CashIn.objects.get(cashin_id=cash_in.cashin_id)
                 my_file = cash_in.evidence
-                filename = '../../www/aqiqahon/apps/media/' + my_file.name
+                filename = '../aqiqahon.sahabataqiqah.co.id/apps/media/' + my_file.name
                 with open(filename, 'wb+') as temp_file:
                     for chunk in my_file.chunks():
                         temp_file.write(chunk)
@@ -7037,6 +7079,7 @@ def cashin_add(request, _id, _msg):
         'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
         'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='CASH-IN') if not request.user.is_superuser else Auth.objects.all(),
     }
+    context.update(popup_context)
 
     return render(request, 'home/cashin_add.html', context)
 
@@ -7046,13 +7089,10 @@ def cashin_add(request, _id, _msg):
 def cashin_view(request, _id):
     cash_in = CashIn.objects.get(cashin_id=_id)
     form = FormCashInView(instance=cash_in)
-    orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-order_id')
 
     context = {
         'data': cash_in,
         'form': form,
-        'orders': orders,
         'notif': order_notification(request),
         'segment': 'cash-in',
         'group_segment': 'accounting',
@@ -7068,37 +7108,42 @@ def cashin_view(request, _id):
 @role_required(allowed_roles='CASH-IN')
 def cashin_update(request, _id, _msg):
     cash_in = CashIn.objects.get(cashin_id=_id)
-    orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-order_id')
+    orders = Order.objects.filter(pending_payment__gt=0, regional_id__in=AreaUser.objects.filter(
+        user_id=request.user.user_id).values_list('area_id', flat=True))
+    selected_order_id = request.GET.get('selected_order_id', cash_in.order_id)
+    selected_order = Order.objects.get(order_id=selected_order_id) if Order.objects.filter(order_id=selected_order_id) else Order.objects.get(order_id=cash_in.order_id)
     order = Order.objects.get(order_id=cash_in.order_id)
     amount_before = cash_in.cashin_amount
+    popup_context = _get_cashin_order_popup_context(request, orders)
 
     if request.POST:
         form = FormCashInUpdate(request.POST, request.FILES, instance=cash_in)
         if form.is_valid():
             update = form.save(commit=False)
             update.cashin_type = request.POST.get('cashin_type')
-            if update.cashin_amount > order.pending_payment + amount_before:
-                return HttpResponseRedirect(reverse('cashin-update', args=[_id, '1']))
+            target_order_id = request.POST.get('selected_order_id', cash_in.order_id)
+            target_order = Order.objects.get(order_id=target_order_id)
+            max_allowed = order.pending_payment + amount_before if target_order_id == cash_in.order_id else target_order.pending_payment
+            if update.cashin_amount > max_allowed:
+                error_url = reverse('cashin-update', args=[_id, '1'])
+                if target_order_id:
+                    error_url += f'?selected_order_id={target_order_id}'
+                return HttpResponseRedirect(error_url)
+            original_order_id = cash_in.order_id
+            update.order_id = target_order_id
             update.save()
 
             if not settings.DEBUG:
                 cash_in = CashIn.objects.get(cashin_id=cash_in.cashin_id)
                 my_file = cash_in.evidence
-                filename = '../../www/aqiqahon/apps/media/' + my_file.name
+                filename = '../aqiqahon.sahabataqiqah.co.id/apps/media/' + my_file.name
                 with open(filename, 'wb+') as temp_file:
                     for chunk in my_file.chunks():
                         temp_file.write(chunk)
 
-            order.down_payment = CashIn.objects.filter(
-                order_id=cash_in.order_id).aggregate(cashin=Sum('cashin_amount'))['cashin'] if CashIn.objects.filter(order_id=cash_in.order_id) else 0
-            order.save()
-
-            if order.pending_payment == 0:
-                order.order_status = 'LUNAS'
-            else:
-                order.order_status = 'DP'
-            order.save()
+            _refresh_order_payment_status(original_order_id)
+            if target_order_id != original_order_id:
+                _refresh_order_payment_status(target_order_id)
 
             return HttpResponseRedirect(reverse('cashin-index'))
     else:
@@ -7109,6 +7154,8 @@ def cashin_update(request, _id, _msg):
         'form': form,
         'data': cash_in,
         'orders': orders,
+        'selected_order': selected_order,
+        'selected_order_id': selected_order.order_id,
         'notif': order_notification(request),
         'segment': 'cash-in',
         'group_segment': 'accounting',
@@ -7117,6 +7164,7 @@ def cashin_update(request, _id, _msg):
         'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
         'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='CASH-IN') if not request.user.is_superuser else Auth.objects.all(),
     }
+    context.update(popup_context)
 
     return render(request, 'home/cashin_view.html', context)
 

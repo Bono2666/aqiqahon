@@ -4,6 +4,17 @@
 
 {% block content %}
 
+<style>
+    .page-link.active,
+    .active > .page-link,
+    .pagination .page-item.active .page-link {
+        background: #ff8c42 !important;
+        background-image: none !important;
+        border-color: #ff8c42 !important;
+        color: #fff !important;
+    }
+</style>
+
 {% load humanize %}
 
 {% load user_agents %}
@@ -154,6 +165,13 @@
                     <h6 class="modal-title" id="exampleModalLabel">Pilih Order Pemesanan</h6>
                 </div>
                 <div class="modal-body border-bottom-0">
+                    <form method="get" class="mb-3">
+                        <input type="hidden" name="open_order_modal" value="1">
+                        <div class="input-group input-group-outline">
+                            <input type="text" name="order_search" class="form-control form-control-sm" placeholder="Cari invoice atau nama pemesan" value="{{ order_search_query }}">
+                            <button class="btn btn-sm bg-gradient-dark mb-0" type="submit">Cari</button>
+                        </div>
+                    </form>
                     <div class="table-responsive p-0">
                         <table class="table hover cursor-pointer align-items-center mb-3" id="orderTable">
                             <thead>
@@ -168,7 +186,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for item in orders %}
+                                {% for item in order_popup_data %}
                                 <tr data-href="{% url 'cashin-add' item.order_id '0' %}" class="cursor-pointer">
                                     <td>
                                         <div class="d-flex pe-2 py-0">
@@ -196,6 +214,30 @@
                             </tbody>
                         </table>
                     </div>
+                    {% if order_page_obj %}
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                        <div class="text-sm text-secondary">
+                            Menampilkan {{ order_page_obj.start_index }} sampai {{ order_page_obj.end_index }} dari {{ order_page_obj.paginator.count }} data
+                        </div>
+                        <nav aria-label="Pagination popup order">
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item {% if not order_page_obj.has_previous %}disabled{% endif %}">
+                                    <a class="page-link" href="{% if order_page_obj.has_previous %}?{{ order_pagination_query }}open_order_modal=1&order_page={{ order_page_obj.previous_page_number }}{% else %}javascript:void(0){% endif %}">&lt;</a>
+                                </li>
+                                {% for num in order_page_obj.paginator.page_range %}
+                                    {% if num >= order_page_obj.number|add:-2 and num <= order_page_obj.number|add:2 %}
+                                    <li class="page-item {% if order_page_obj.number == num %}active{% endif %}">
+                                        <a class="page-link" href="?{{ order_pagination_query }}open_order_modal=1&order_page={{ num }}">{{ num }}</a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                                <li class="page-item {% if not order_page_obj.has_next %}disabled{% endif %}">
+                                    <a class="page-link" href="{% if order_page_obj.has_next %}?{{ order_pagination_query }}open_order_modal=1&order_page={{ order_page_obj.next_page_number }}{% else %}javascript:void(0){% endif %}">&gt;</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="modal-footer border-top-0 d-flex">
                     <a type="button" class="btn btn-sm bg-gradient-dark mb-0" data-bs-dismiss="modal"><i class="fas fa-angle-left"></i>&nbsp;&nbsp;Tutup</a>
@@ -240,7 +282,7 @@
         orders_modal.show();
     });
         
-    $(document).on('click', 'tbody tr', function() {
+    $(document).on('click', '#orderTable tbody tr', function() {
         var href = $(this).data('href');
         if(href) { // Check if href data exists
             window.location = href;
@@ -250,45 +292,24 @@
     });
     
     $(document).ready(function() {
-        if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        if ($('#orderTable').length) {
             $('#orderTable').DataTable({
                 "info": false,
                 "lengthChange": false,
-                "pageLength": -1,
                 "paging": false,
+                "searching": false,
                 "order": [[ 0, "desc" ]],
-                "scrollX": true,
+                "scrollX": false,
                 'language': {
-                    'search': 'Cari: ',
-                    'info': 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
-                    'lengthMenu': 'Tampilkan _MENU_ data',
-                    'infoEmpty': '',
-                    'zeroRecords': 'Tidak ada data',
-                    'paginate': {
-                        'next': 'Selanjutnya',
-                        'previous': 'Sebelumnya'
-                    }
+                    'zeroRecords': 'Tidak ada data'
                 }
             });
-        } else {
-            $('#orderTable').DataTable({
-                "info": false,
-                "lengthChange": false,
-                "pageLength": -1,
-                "paging": false,
-                "order": [[ 0, "desc" ]],
-                'language': {
-                    'search': 'Cari: ',
-                    'info': 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
-                    'lengthMenu': 'Tampilkan _MENU_ data',
-                    'infoEmpty': '',
-                    'zeroRecords': 'Tidak ada data',
-                    'paginate': {
-                        'next': 'Selanjutnya',
-                        'previous': 'Sebelumnya'
-                    }
-                }
-            });
+        }
+
+        const popupParams = new URLSearchParams(window.location.search);
+        if (popupParams.get('open_order_modal') === '1') {
+            let orders_modal = new bootstrap.Modal(document.getElementById('orders'));
+            orders_modal.show();
         }
     });
 

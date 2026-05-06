@@ -5,9 +5,12 @@
 {% block content %}
 
 <style>
+    .page-link.active,
+    .active > .page-link,
     .pagination .page-item.active .page-link {
-        background: linear-gradient(87deg, #FF8C42 0, #FF8C42 100%) !important;
-        border-color: transparent !important;
+        background: #ff8c42 !important;
+        background-image: none !important;
+        border-color: #ff8c42 !important;
         color: #fff !important;
         box-shadow: 0 3px 3px 0 rgba(0, 0, 0, 0.14), 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 1px 5px 0 rgba(0, 0, 0, 0.12);
     }
@@ -129,7 +132,7 @@
                                 {% for num in page_obj.paginator.page_range %}
                                     {% if num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
                                     <li class="page-item {% if page_obj.number == num %}active{% endif %}">
-                                        <a class="page-link {% if page_obj.number == num %}text-white border-0{% endif %}" {% if page_obj.number == num %}style="background: linear-gradient(87deg, #FF8C42 0, #FF8C42 100%) !important; color: #fff !important; border-color: transparent !important;"{% endif %} href="?{{ pagination_query }}page={{ num }}">{{ num }}</a>
+                                        <a class="page-link {% if page_obj.number == num %}text-white border-0{% endif %}" {% if page_obj.number == num %}style="background: #ff8c42 !important; background-image: none !important; color: #fff !important; border-color: #ff8c42 !important;"{% endif %} href="?{{ pagination_query }}page={{ num }}">{{ num }}</a>
                                     </li>
                                     {% endif %}
                                 {% endfor %}

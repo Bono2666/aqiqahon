@@ -113,7 +113,7 @@
                                 <div class="col-md-6">
                                     <div class="shadow-none">
                                         {{ form.delivery_date.label_tag }}
-                                        <input type="date" name="delivery_date" class="form-control form-control-sm" value="{{ data.delivery_date|date:'Y-m-d' }}">
+                                        <input type="date" name="delivery_date" class="form-control form-control-sm" value="{{ data.delivery_date|date:'Y-m-d' }}" min="{% now 'Y-m-d' %}">
                                         <div class="text-sm text-danger">
                                             {{ form.delivery_date.errors }}
                                         </div>

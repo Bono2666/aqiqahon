@@ -8,6 +8,36 @@ from tinymce.widgets import TinyMCE
 from django.forms.widgets import TimeInput
 
 
+def _today_iso():
+    return datetime.date.today().isoformat()
+
+
+class OrderDeliveryDateValidationMixin:
+    def _setup_delivery_date_field(self):
+        if 'delivery_date' not in self.fields:
+            return
+
+        self.fields['delivery_date'].widget.attrs['min'] = _today_iso()
+        self.fields['delivery_date'].widget.attrs['type'] = 'date'
+
+    def clean_delivery_date(self):
+        delivery_date = self.cleaned_data.get('delivery_date')
+        if not delivery_date:
+            return delivery_date
+
+        if isinstance(delivery_date, datetime.datetime):
+            delivery_day = delivery_date.date()
+        else:
+            delivery_day = delivery_date
+
+        if delivery_day < datetime.date.today():
+            raise forms.ValidationError(
+                'Tanggal pengiriman tidak boleh kurang dari hari ini.'
+            )
+
+        return delivery_date
+
+
 class FormUser(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super(FormUser, self).__init__(*args, **kwargs)
@@ -1137,7 +1167,7 @@ class FormCustomerDetail(ModelForm):
         }
 
 
-class FormOrder(ModelForm):
+class FormOrder(OrderDeliveryDateValidationMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormOrder, self).__init__(*args, **kwargs)
         self.label_suffix = ''
@@ -1173,6 +1203,7 @@ class FormOrder(ModelForm):
             attrs={'class': 'form-control-sm'})
         self.fields['delivery_date'].label = 'Tanggal Pengiriman'
         self.fields['time_arrival'].label = 'Jam Acara'
+        self._setup_delivery_date_field()
 
     class Meta:
         model = Order
@@ -1181,12 +1212,12 @@ class FormOrder(ModelForm):
 
         widgets = {
             'customer_address': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 4}),
-            'delivery_date': DateInput(attrs={'class': 'form-control form-control-sm'}),
+            'delivery_date': DateInput(attrs={'class': 'form-control form-control-sm', 'type': 'date'}),
             'time_arrival': TimeInput(attrs={'class': 'form-control form-control-sm', 'data-provide': 'timepicker', 'data-time-format': 'HH:ii', 'type': 'time'}),
         }
 
 
-class FormOrderUpdate(ModelForm):
+class FormOrderUpdate(OrderDeliveryDateValidationMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormOrderUpdate, self).__init__(*args, **kwargs)
         self.label_suffix = ''
@@ -1215,6 +1246,7 @@ class FormOrderUpdate(ModelForm):
             attrs={'class': 'form-control-sm'})
         self.fields['delivery_date'].label = 'Tanggal Pengiriman'
         self.fields['time_arrival'].label = 'Jam Acara'
+        self._setup_delivery_date_field()
 
     class Meta:
         model = Order
@@ -1223,7 +1255,7 @@ class FormOrderUpdate(ModelForm):
 
         widgets = {
             'customer_address': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 4}),
-            'delivery_date': DateInput(attrs={'class': 'form-control form-control-sm'}),
+            'delivery_date': DateInput(attrs={'class': 'form-control form-control-sm', 'type': 'date'}),
             'time_arrival': TimeInput(attrs={'class': 'form-control form-control-sm', 'data-provide': 'timepicker', 'data-time-format': 'HH:ii', 'type': 'time'}),
         }
 

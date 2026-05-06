@@ -6380,6 +6380,21 @@ def _join_nonempty(parts, separator=', '):
     return separator.join(str(part) for part in parts if part)
 
 
+def _validate_delivery_date_not_past(value):
+    if not value:
+        return None
+
+    try:
+        delivery_day = datetime.date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return 'Format tanggal pengiriman tidak valid.'
+
+    if delivery_day < datetime.date.today():
+        return 'Tanggal pengiriman tidak boleh kurang dari hari ini.'
+
+    return None
+
+
 def order_confirm_update(request, _id):
     order = Order.objects.get(order_id=_id)
     last_package = OrderPackage.objects.filter(order_id=_id).last()
@@ -6751,6 +6766,32 @@ def order_cs_update(request, _id, _cat, _pack, _type):
     if request.POST:
         form = FormOrderCSUpdate(request.POST, instance=order)
         if form.is_valid():
+            delivery_date_error = _validate_delivery_date_not_past(
+                request.POST.get('delivery_date')
+            )
+            if delivery_date_error:
+                context = {
+                    'form': form,
+                    'data': order,
+                    'child': child,
+                    'package': package,
+                    'id': _id,
+                    'cat': _cat,
+                    'pack': _pack,
+                    'type': _type,
+                    'crud_det': '0',
+                    'msg': delivery_date_error,
+                    'got_promo': got_promo,
+                    'gifts': gifts,
+                    'notif': order_notification(request),
+                    'segment': 'order',
+                    'group_segment': 'transaction',
+                    'crud': 'update',
+                    'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+                    'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='ORDER') if not request.user.is_superuser else Auth.objects.all(),
+                }
+                return render(request, 'home/order_view.html', context)
+
             order = form.save(commit=False)
             order.customer_name = request.POST.get('customer_name')
             order.customer_phone = request.POST.get('customer_phone')

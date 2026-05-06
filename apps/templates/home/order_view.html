@@ -154,7 +154,7 @@
                                 <div class="col-md-6">
                                     <div class="shadow-none">
                                         <label class="form-control-label" for="id-delivery-date">Tanggal Pengiriman</label>
-                                        <input type="date" name="delivery_date" id="id-delivery-date" class="form-control form-control-sm" value="{{ data.delivery_date|date:'Y-m-d' }}" {% if crud == 'view' %}readonly{% endif %}>
+                                        <input type="date" name="delivery_date" id="id-delivery-date" class="form-control form-control-sm" value="{{ data.delivery_date|date:'Y-m-d' }}" min="{% now 'Y-m-d' %}" {% if crud == 'view' %}readonly{% endif %}>
                                     </div>
                                 </div>
                                 <div class="col-md-6">

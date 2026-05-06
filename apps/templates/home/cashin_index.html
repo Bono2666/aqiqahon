@@ -4,6 +4,15 @@
 
 {% block content %}
 
+<style>
+    .pagination .page-item.active .page-link {
+        background: linear-gradient(87deg, #FF8C42 0, #FF8C42 100%) !important;
+        border-color: transparent !important;
+        color: #fff !important;
+        box-shadow: 0 3px 3px 0 rgba(0, 0, 0, 0.14), 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 1px 5px 0 rgba(0, 0, 0, 0.12);
+    }
+</style>
+
 {% load humanize %}
 
 {% load user_agents %}
@@ -30,6 +39,16 @@
                         {% else %}                                                                                                                                                                                                                                                                                                                                            
                         <a class="btn btn-sm bg-gradient-primary mb-0 {% if not btn.add and not request.user.is_superuser %}disabled{% endif %}" href="{% url 'cashin-add' '0' '0' %}"><i class="fas fa-plus"></i>&nbsp;&nbsp;Buat Uang Masuk</a>
                         {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12 col-md-6">
+                        <form method="get">
+                            <div class="input-group input-group-outline">
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Cari invoice, pemesan, bank, catatan, cabang" value="{{ search_query }}">
+                                <button class="btn btn-sm bg-gradient-dark mb-0" type="submit">Cari</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
                 <div class="card-body px-0 pt-0 pb-2">
@@ -74,7 +93,7 @@
                                         <h6 class="mb-0 text-sm">{% if item.bank %}{{ item.bank }}{% endif %}</h6>
                                     </td>
                                     <td>
-                                        <h6 class="mb-0 text-sm">{{ item.note|truncatechars:20 }}</h6>
+                                        <h6 class="mb-0 text-sm">{{ item.cashin_note|truncatechars:20 }}</h6>
                                     </td>
                                     <td>
                                         <h6 class="mb-0 text-sm">{{ item.entry_date|date:'d M Y' }}</h6>
@@ -87,6 +106,30 @@
                             </tbody>
                         </table>
                     </div>
+                    {% if page_obj %}
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center px-3 pt-3 gap-3">
+                        <div class="text-sm text-secondary">
+                            Menampilkan {{ page_obj.start_index }} sampai {{ page_obj.end_index }} dari {{ page_obj.paginator.count }} data
+                        </div>
+                        <nav aria-label="Pagination uang masuk">
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                                    <a class="page-link" href="{% if page_obj.has_previous %}?{{ pagination_query }}page={{ page_obj.previous_page_number }}{% else %}javascript:void(0){% endif %}">&lt;</a>
+                                </li>
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+                                    <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                                        <a class="page-link {% if page_obj.number == num %}text-white border-0{% endif %}" {% if page_obj.number == num %}style="background: linear-gradient(87deg, #FF8C42 0, #FF8C42 100%) !important; color: #fff !important; border-color: transparent !important;"{% endif %} href="?{{ pagination_query }}page={{ num }}">{{ num }}</a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                                <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                                    <a class="page-link" href="{% if page_obj.has_next %}?{{ pagination_query }}page={{ page_obj.next_page_number }}{% else %}javascript:void(0){% endif %}">&gt;</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -99,45 +142,23 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-    $(document).ready( function () {
-        if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-            $('#myTable').DataTable({
-                'pageLength': 25,
-                'lengthChange': false,
-                'language': {
-                    'search': 'Cari: ',
-                    'info': 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
-                    'lengthMenu': 'Tampilkan _MENU_ data',
-                    'infoEmpty': '',
-                    'zeroRecords': 'Tidak ada data',
-                    'paginate': {
-                        'next': 'Selanjutnya',
-                        'previous': 'Sebelumnya'
-                    }
-                }
-            });
-        } else {
-            new DataTable('#myTable', {
-                'pageLength': 25, 
-                'language': {
-                    'search': 'Cari: ',
-                    'info': 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
-                    'lengthMenu': 'Tampilkan _MENU_ data',
-                    'infoEmpty': '',
-                    'zeroRecords': 'Tidak ada data',
-                    'paginate': {
-                        'next': 'Selanjutnya',
-                        'previous': 'Sebelumnya'
-                    }
-                }
-            });
+    $(document).ready(function () {
+        if ($.fn.DataTable.isDataTable('#myTable')) {
+            $('#myTable').DataTable().destroy();
         }
 
-        btn = document.getElementsByClassName('paginate_button');
-        for (var button of btn) {
-            button.classList.add('border-radius-top-start-circle', 'border-radius-bottom-end-circle', 'border-radius-top-end-circle', 'border-radius-bottom-start-circle');
-        }
-    } );
+        $('#myTable').DataTable({
+            'paging': false,
+            'searching': false,
+            'info': false,
+            'lengthChange': false,
+            'ordering': true,
+            'order': [],
+            'language': {
+                'zeroRecords': 'Tidak ada data'
+            }
+        });
+    });
 
     $(document).on('click', 'tbody tr', function() {
         var href = $(this).data('href');

@@ -18,6 +18,7 @@ import xlsxwriter
 from django.db.models import Sum
 from django.db.models import Max
 from django.db.models import Min
+from django.db.models import Q
 from . import host
 from reportlab.pdfgen import canvas
 from django.http import FileResponse
@@ -25,6 +26,7 @@ from reportlab.platypus import Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import landscape, A4
 from django.db.models import Count
+from django.core.paginator import Paginator
 from PyPDF2 import PdfMerger
 from django.conf import settings
 from xhtml2pdf import pisa
@@ -6395,6 +6397,24 @@ def _validate_delivery_date_not_past(value):
     return None
 
 
+def _paginate_queryset(request, queryset, per_page=25):
+    paginator = Paginator(queryset, per_page)
+    page_number = request.GET.get('page') or 1
+    page_obj = paginator.get_page(page_number)
+    return page_obj
+
+
+def _get_search_query(request):
+    return request.GET.get('search', '').strip()
+
+
+def _get_pagination_query(request):
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    query_string = query_params.urlencode()
+    return f'{query_string}&' if query_string else ''
+
+
 def order_confirm_update(request, _id):
     order = Order.objects.get(order_id=_id)
     last_package = OrderPackage.objects.filter(order_id=_id).last()
@@ -6543,6 +6563,7 @@ def form_index(request):
 @login_required(login_url='/login/')
 @role_required(allowed_roles='ORDER-ARCHIVE')
 def order_archive(request, _branch, _date):
+    search_query = _get_search_query(request)
     all_orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__lt=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=[
         'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__lt=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
     if _branch == 'all':
@@ -6556,18 +6577,32 @@ def order_archive(request, _branch, _date):
         else:
             orders = Order.objects.filter(regional_id=_branch, delivery_date=_date).order_by('-order_id', 'regional').exclude(order_status__in=[
                 'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch, delivery_date=_date).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+
+    if search_query:
+        orders = orders.filter(
+            Q(order_id__icontains=search_query) |
+            Q(customer_name__icontains=search_query) |
+            Q(cs__icontains=search_query) |
+            Q(regional__area_name__icontains=search_query)
+        )
+
     br_order = all_orders.values_list('regional', flat=True).distinct()
     branch = AreaSales.objects.filter(area_id__in=br_order)
     br_name = AreaSales.objects.get(
         area_id=_branch).area_name if _branch != 'all' else 'Semua Cabang'
     # get date from delivery date
 
+    page_obj = _paginate_queryset(request, orders)
+
     context = {
-        'data': orders,
+        'data': page_obj.object_list,
+        'page_obj': page_obj,
         'branch': branch,
         'br_name': br_name,
         'selected_branch': _branch,
         'selected_date': _date,
+        'search_query': search_query,
+        'pagination_query': _get_pagination_query(request),
         'notif': order_notification(request),
         'segment': 'order-archive',
         'group_segment': 'transaction',
@@ -6582,6 +6617,7 @@ def order_archive(request, _branch, _date):
 @login_required(login_url='/login/')
 @role_required(allowed_roles='ORDER')
 def order_index(request, _branch, _date):
+    search_query = _get_search_query(request)
     all_orders = Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__gte=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=[
         'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id__in=AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True), delivery_date__gte=date.today() - timedelta(days=90)).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
     if _branch == 'all':
@@ -6595,18 +6631,32 @@ def order_index(request, _branch, _date):
         else:
             orders = Order.objects.filter(regional_id=_branch, delivery_date=_date).order_by('-order_id', 'regional').exclude(order_status__in=[
                 'PENDING', 'BATAL']) if request.user.position_id == 'CS' else Order.objects.filter(regional_id=_branch, delivery_date=_date).order_by('-order_id', 'regional').exclude(order_status__in=['PENDING'])
+
+    if search_query:
+        orders = orders.filter(
+            Q(order_id__icontains=search_query) |
+            Q(customer_name__icontains=search_query) |
+            Q(cs__icontains=search_query) |
+            Q(regional__area_name__icontains=search_query)
+        )
+
     br_order = all_orders.values_list('regional', flat=True).distinct()
     branch = AreaSales.objects.filter(area_id__in=br_order)
     br_name = AreaSales.objects.get(
         area_id=_branch).area_name if _branch != 'all' else 'Semua Cabang'
     # get date from delivery date
 
+    page_obj = _paginate_queryset(request, orders)
+
     context = {
-        'data': orders,
+        'data': page_obj.object_list,
+        'page_obj': page_obj,
         'branch': branch,
         'br_name': br_name,
         'selected_branch': _branch,
         'selected_date': _date,
+        'search_query': search_query,
+        'pagination_query': _get_pagination_query(request),
         'notif': order_notification(request),
         'segment': 'order',
         'group_segment': 'transaction',
@@ -6900,11 +6950,28 @@ def order_cs_update(request, _id, _cat, _pack, _type):
 @login_required(login_url='/login/')
 @role_required(allowed_roles='CASH-IN')
 def cashin_index(request):
-    cash_in = CashIn.objects.filter(order_id__regional_id__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-cashin_id')
+    search_query = _get_search_query(request)
+    cash_in = CashIn.objects.select_related('order', 'order__regional').filter(
+        order_id__regional_id__in=AreaUser.objects.filter(
+            user_id=request.user.user_id
+        ).values_list('area_id', flat=True)
+    ).order_by('-cashin_id')
+    if search_query:
+        cash_in = cash_in.filter(
+            Q(order__order_id__icontains=search_query) |
+            Q(order__customer_name__icontains=search_query) |
+            Q(order__regional__area_name__icontains=search_query) |
+            Q(bank__icontains=search_query) |
+            Q(cashin_note__icontains=search_query) |
+            Q(entry_by__icontains=search_query)
+        )
+    page_obj = _paginate_queryset(request, cash_in)
 
     context = {
-        'data': cash_in,
+        'data': page_obj.object_list,
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'pagination_query': _get_pagination_query(request),
         'notif': order_notification(request),
         'segment': 'cash-in',
         'group_segment': 'accounting',

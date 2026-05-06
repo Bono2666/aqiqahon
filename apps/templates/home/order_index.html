@@ -4,6 +4,15 @@
 
 {% block content %}
 
+<style>
+    .pagination .page-item.active .page-link {
+        background: linear-gradient(87deg, #FF8C42 0, #FF8C42 100%) !important;
+        border-color: transparent !important;
+        color: #fff !important;
+        box-shadow: 0 3px 3px 0 rgba(0, 0, 0, 0.14), 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 1px 5px 0 rgba(0, 0, 0, 0.12);
+    }
+</style>
+
 {% load humanize %}
 
 {% load user_agents %}
@@ -25,6 +34,16 @@
                     </div>
                     <div class="{% if request|is_mobile %}col-12 mt-3{% else %}col-2 text-end{% endif %}">
                         <input type="date" id="filter-date" class="form-control form-control-sm" value="{% if selected_date != '0' %}{{ selected_date }}{% endif %}" title="Filter Tanggal Antar">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12 col-md-6">
+                        <form method="get">
+                            <div class="input-group input-group-outline">
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Cari invoice, nama pemesan, CS, cabang" value="{{ search_query }}">
+                                <button class="btn btn-sm bg-gradient-dark mb-0" type="submit">Cari</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
                 <div class="card-body px-0 pt-0 pb-2">
@@ -97,6 +116,30 @@
                             </tbody>
                         </table>
                     </div>
+                    {% if page_obj %}
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center px-3 pt-3 gap-3">
+                        <div class="text-sm text-secondary">
+                            Menampilkan {{ page_obj.start_index }} sampai {{ page_obj.end_index }} dari {{ page_obj.paginator.count }} data
+                        </div>
+                        <nav aria-label="Pagination order">
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                                    <a class="page-link" href="{% if page_obj.has_previous %}?{{ pagination_query }}page={{ page_obj.previous_page_number }}{% else %}javascript:void(0){% endif %}">&lt;</a>
+                                </li>
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+                                    <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                                        <a class="page-link {% if page_obj.number == num %}text-white border-0{% endif %}" {% if page_obj.number == num %}style="background: linear-gradient(87deg, #FF8C42 0, #FF8C42 100%) !important; color: #fff !important; border-color: transparent !important;"{% endif %} href="?{{ pagination_query }}page={{ num }}">{{ num }}</a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                                <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                                    <a class="page-link" href="{% if page_obj.has_next %}?{{ pagination_query }}page={{ page_obj.next_page_number }}{% else %}javascript:void(0){% endif %}">&gt;</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -122,7 +165,7 @@
                         <div class="table-responsive p-0">
                             <table class="table align-items-center mb-0" id="branchTable">
                                 <tbody>
-                                    <tr data-href="{% url 'order-index' 'all' selected_date %}" class="cursor-pointer">
+                                    <tr data-href="{% url 'order-index' 'all' selected_date %}{% if search_query %}?search={{ search_query|urlencode }}{% endif %}" class="cursor-pointer">
                                         <td>
                                             <div class="d-flex pe-2 py-0">
                                                 <div class="d-flex flex-column justify-content-center">
@@ -132,7 +175,7 @@
                                         </td>
                                     </tr>
                                     {% for item in branch %}
-                                    <tr data-href="{% url 'order-index' item.area_id selected_date %}" class="cursor-pointer">
+                                    <tr data-href="{% url 'order-index' item.area_id selected_date %}{% if search_query %}?search={{ search_query|urlencode }}{% endif %}" class="cursor-pointer">
                                         <td>
                                             <div class="d-flex pe-2 py-0">
                                                 <div class="d-flex flex-column justify-content-center">
@@ -158,62 +201,48 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
+    $(document).ready(function () {
+        if ($.fn.DataTable.isDataTable('#myTable')) {
+            $('#myTable').DataTable().destroy();
+        }
+
+        $('#myTable').DataTable({
+            'scrollX': true,
+            'paging': false,
+            'searching': false,
+            'info': false,
+            'lengthChange': false,
+            'ordering': true,
+            'order': [],
+            'columnDefs': [
+                { 'orderable': false, 'targets': 11 }
+            ],
+            'language': {
+                'zeroRecords': 'Tidak ada data'
+            }
+        });
+    });
+
     var dateInput = document.getElementById('filter-date');
     var selectedBranch = "{{ selected_branch }}";
+    var searchQuery = "{{ search_query|escapejs }}";
     dateInput.addEventListener('change', function() {
         var selectedDate = this.value;
         if(selectedDate === '') {
-            window.location.href = '{% url "order-index" "all" "0" %}';
+            var url = '{% url "order-index" "all" "0" %}';
+            if (searchQuery) {
+                url += '?search=' + encodeURIComponent(searchQuery);
+            }
+            window.location.href = url;
         } else {
-            window.location.href = '{% url "order-index" "all" "0" %}'.replace('all', selectedBranch).replace('0', selectedDate);
+            var url = '{% url "order-index" "all" "0" %}'.replace('all', selectedBranch).replace('0', selectedDate);
+            if (searchQuery) {
+                url += '?search=' + encodeURIComponent(searchQuery);
+            }
+            window.location.href = url;
         }
     });
 
-    $(document).ready( function () {
-        if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-            $('#myTable').DataTable({
-                'scrollX': true,
-                'pageLength': 25, 
-                'order': [[11, 'desc']],
-                'lengthChange': false,
-                'language': {
-                    'search': 'Cari: ',
-                    'info': 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
-                    'lengthMenu': 'Tampilkan _MENU_ data',
-                    'infoEmpty': '',
-                    'zeroRecords': 'Tidak ada data',
-                    'paginate': {
-                        'next': 'Selanjutnya',
-                        'previous': 'Sebelumnya'
-                    }
-                }
-            });
-        } else {
-            new DataTable('#myTable', {
-                'scrollX': true,
-                'pageLength': 25,
-                'lengthMenu': [25, 50, 100, 250, 500],
-                'order': [[11, 'desc']],
-                'language': {
-                    'search': 'Cari: ',
-                    'info': 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
-                    'lengthMenu': 'Tampilkan _MENU_ data',
-                    'infoEmpty': '',
-                    'zeroRecords': 'Tidak ada data',
-                    'paginate': {
-                        'next': 'Selanjutnya',
-                        'previous': 'Sebelumnya'
-                    }
-                }
-            });
-        }
-
-        btn = document.getElementsByClassName('paginate_button');
-        for (var i = 0; i < btn.length; i++) {
-            btn[i].classList.add('border-radius-top-start-circle', 'border-radius-bottom-end-circle', 'border-radius-top-end-circle', 'border-radius-bottom-start-circle');
-        }
-    });
-    
     // run href on order table when clicked except for the last columns
     $(document).on('click', 'tbody tr td:not(:last-child)', function() {
         var href = $(this).parent().data('href');

@@ -85,7 +85,7 @@ def user_add(request):
             if not settings.DEBUG and form.instance.signature:
                 user = User.objects.get(user_id=form.instance.user_id)
                 my_file = user.signature
-                filename = '../../www/aqiqahon/apps/media/' + my_file.name
+                filename = '../aqiqahon.sahabataqiqah.co.id/apps/media/' + my_file.name
                 with open(filename, 'wb+') as temp_file:
                     for chunk in my_file.chunks():
                         temp_file.write(chunk)
@@ -285,7 +285,7 @@ def user_update(request, _id):
             form.save()
             if not settings.DEBUG and users.signature:
                 my_file = users.signature
-                filename = '../../www/aqiqahon/apps/media/' + my_file.name
+                filename = '../aqiqahon.sahabataqiqah.co.id/apps/media/' + my_file.name
                 with open(filename, 'wb+') as temp_file:
                     for chunk in my_file.chunks():
                         temp_file.write(chunk)
@@ -5375,6 +5375,12 @@ def order_child_add(request, _id, _add):
 
 def order_cs_child_add(request, _id):
     if request.POST:
+        child_birth_error = _validate_child_birth_not_future(
+            request.POST.get('child_birth')
+        )
+        if child_birth_error:
+            return HttpResponseRedirect(reverse('order-view', args=[_id, '0', '0', '0', '0']))
+
         _child = OrderChild.objects.get(order_id=_id, child_name=request.POST.get('child_name')) if OrderChild.objects.filter(
             order_id=_id, child_name=request.POST.get('child_name')) else None
         if not _child:
@@ -5491,6 +5497,12 @@ def order_child_cs_update(request, _id, _child):
     child = OrderChild.objects.get(order_id=_id, id=_child)
 
     if request.POST:
+        child_birth_error = _validate_child_birth_not_future(
+            request.POST.get('child_birth')
+        )
+        if child_birth_error:
+            return HttpResponseRedirect(reverse('order-view', args=[_id, '0', '0', '0', '0']))
+
         child.child_name = request.POST.get('child_name')
         child.child_birth = request.POST.get('child_birth')
         child.child_sex = request.POST.get('child_sex')
@@ -6397,6 +6409,21 @@ def _validate_delivery_date_not_past(value):
     return None
 
 
+def _validate_child_birth_not_future(value):
+    if not value:
+        return None
+
+    try:
+        child_birth_day = datetime.date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return 'Format tanggal lahir tidak valid.'
+
+    if child_birth_day > datetime.date.today():
+        return 'Tanggal lahir tidak boleh melebihi hari ini.'
+
+    return None
+
+
 def _paginate_queryset(request, queryset, per_page=25, page_param='page'):
     paginator = Paginator(queryset, per_page)
     page_number = request.GET.get(page_param) or 1
@@ -7111,7 +7138,8 @@ def cashin_update(request, _id, _msg):
     orders = Order.objects.filter(pending_payment__gt=0, regional_id__in=AreaUser.objects.filter(
         user_id=request.user.user_id).values_list('area_id', flat=True))
     selected_order_id = request.GET.get('selected_order_id', cash_in.order_id)
-    selected_order = Order.objects.get(order_id=selected_order_id) if Order.objects.filter(order_id=selected_order_id) else Order.objects.get(order_id=cash_in.order_id)
+    selected_order = Order.objects.get(order_id=selected_order_id) if Order.objects.filter(
+        order_id=selected_order_id) else Order.objects.get(order_id=cash_in.order_id)
     order = Order.objects.get(order_id=cash_in.order_id)
     amount_before = cash_in.cashin_amount
     popup_context = _get_cashin_order_popup_context(request, orders)
@@ -7121,9 +7149,11 @@ def cashin_update(request, _id, _msg):
         if form.is_valid():
             update = form.save(commit=False)
             update.cashin_type = request.POST.get('cashin_type')
-            target_order_id = request.POST.get('selected_order_id', cash_in.order_id)
+            target_order_id = request.POST.get(
+                'selected_order_id', cash_in.order_id)
             target_order = Order.objects.get(order_id=target_order_id)
-            max_allowed = order.pending_payment + amount_before if target_order_id == cash_in.order_id else target_order.pending_payment
+            max_allowed = order.pending_payment + \
+                amount_before if target_order_id == cash_in.order_id else target_order.pending_payment
             if update.cashin_amount > max_allowed:
                 error_url = reverse('cashin-update', args=[_id, '1'])
                 if target_order_id:
@@ -7227,13 +7257,19 @@ def order_invoice(request, _id):
     pdf_file = canvas.Canvas(filename)
 
     # Add logo in the top left corner
-    logo_path = '../www/aqiqahon/apps/static/img/logo.png'
-    if logo_path:
-        pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
+    try:
+        logo_path = '../www/aqiqahon/apps/static/img/logo.png'
+        image_path = '../www/aqiqahon/apps/static/img/lunas.png'
+        if logo_path:
+            pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
+    except:
+        logo_path = '../../www/aqiqahon/apps/static/img/logo.png'
+        image_path = '../../www/aqiqahon/apps/static/img/lunas.png'
+        if logo_path:
+            pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
 
     if order.order_status == 'LUNAS':
         # Add image with transparent 20% in the middle of the page
-        image_path = '../www/aqiqahon/apps/static/img/lunas.png'
         if image_path:
             pdf_file.drawImage(image_path, 35, 400, width=525,
                                height=350, mask='auto')
@@ -7739,13 +7775,19 @@ def order_bap(request, _id):
     pdf_file = canvas.Canvas(filename)
 
     # Add logo in the top center
-    logo_path = '../www/aqiqahon/apps/static/img/logo.png'
-    if logo_path:
-        pdf_file.drawImage(logo_path, 260, 745, width=70, height=61)
+    try:
+        logo_path = '../www/aqiqahon/apps/static/img/logo.png'
+        image_path = '../www/aqiqahon/apps/static/img/lunas.png'
+        if logo_path:
+            pdf_file.drawImage(logo_path, 260, 745, width=70, height=61)
+    except:
+        logo_path = '../../www/aqiqahon/apps/static/img/logo.png'
+        image_path = '../../www/aqiqahon/apps/static/img/lunas.png'
+        if logo_path:
+            pdf_file.drawImage(logo_path, 260, 745, width=70, height=61)
 
     if order.order_status == 'LUNAS':
         # Add image with transparent 20% in the middle of the page
-        image_path = finders.find('img/lunas.png')
         if image_path:
             pdf_file.drawImage(image_path, 35, 400, width=525,
                                height=350, mask='auto')
@@ -8153,8 +8195,12 @@ def order_checklist(request, _id):
 
     for i in range(0, package.count()):
         # Add logo in the top left corner
-        logo_path = '../www/aqiqahon/apps/static/img/logo.png'
-        pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
+        try:
+            logo_path = '../www/aqiqahon/apps/static/img/logo.png'
+            pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
+        except:
+            logo_path = '../../www/aqiqahon/apps/static/img/logo.png'
+            pdf_file.drawImage(logo_path, 35, 745, width=70, height=61)
 
         title = "CHECKLIST FORM"
         title_width = pdf_file.stringWidth(

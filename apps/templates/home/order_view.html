@@ -334,7 +334,7 @@
                                             <div class="col-md-6">
                                                 <div class="shadow-none">
                                                     <label class="form-control-label" for="id-child-birth">Tanggal Lahir</label>
-                                                    <input type="date" name="child_birth" id="id-child-birth" class="form-control form-control-sm" required>
+                                                    <input type="date" name="child_birth" id="id-child-birth" class="form-control form-control-sm" max="{% now 'Y-m-d' %}" required>
                                                     <div class="text-sm text-danger">
                                                         {{ formChild.child_birth.errors }}
                                                     </div>
@@ -477,7 +477,7 @@
                                                             <div class="col-md-6">
                                                                 <div class="shadow-none">
                                                                     <label class="form-control-label" for="id-child-birth">Tanggal Lahir</label>
-                                                                    <input type="date" name="child_birth" id="id-child-birth" class="form-control form-control-sm" value="{{ item.child_birth|date:'Y-m-d' }}" required>
+                                                                    <input type="date" name="child_birth" id="id-child-birth" class="form-control form-control-sm" value="{{ item.child_birth|date:'Y-m-d' }}" max="{% now 'Y-m-d' %}" required>
                                                                     <div class="text-sm text-danger">
                                                                         {{ formChild.child_birth.errors }}
                                                                     </div>

@@ -87,7 +87,7 @@
                                 <div class="col-md-4">
                                     <div class="form-group shadow-none mb-0">
                                         {{ form.child_birth.label_tag }}
-                                        <input type="date" name="child_birth" class="form-control form-control-sm" value="{{ data.child_birth|date:'Y-m-d' }}">
+                                        <input type="date" name="child_birth" class="form-control form-control-sm" value="{{ data.child_birth|date:'Y-m-d' }}" max="{% now 'Y-m-d' %}">
                                         <div class="text-sm text-danger">
                                             {{ form.child_birth.errors }}
                                         </div>

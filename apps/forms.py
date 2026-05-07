@@ -38,6 +38,32 @@ class OrderDeliveryDateValidationMixin:
         return delivery_date
 
 
+class OrderChildBirthValidationMixin:
+    def _setup_child_birth_field(self):
+        if 'child_birth' not in self.fields:
+            return
+
+        self.fields['child_birth'].widget.attrs['max'] = _today_iso()
+        self.fields['child_birth'].widget.attrs['type'] = 'date'
+
+    def clean_child_birth(self):
+        child_birth = self.cleaned_data.get('child_birth')
+        if not child_birth:
+            return child_birth
+
+        if isinstance(child_birth, datetime.datetime):
+            birth_day = child_birth.date()
+        else:
+            birth_day = child_birth
+
+        if birth_day > datetime.date.today():
+            raise forms.ValidationError(
+                'Tanggal lahir tidak boleh melebihi hari ini.'
+            )
+
+        return child_birth
+
+
 class FormUser(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super(FormUser, self).__init__(*args, **kwargs)
@@ -1260,7 +1286,7 @@ class FormOrderUpdate(OrderDeliveryDateValidationMixin, ModelForm):
         }
 
 
-class FormOrderChild(ModelForm):
+class FormOrderChild(OrderChildBirthValidationMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormOrderChild, self).__init__(*args, **kwargs)
         self.label_suffix = ''
@@ -1277,6 +1303,7 @@ class FormOrderChild(ModelForm):
         self.fields['child_mother'].label = 'Nama Ibu'
         self.fields['child_mother'].widget = forms.TextInput(
             attrs={'class': 'form-control-sm'})
+        self._setup_child_birth_field()
 
     class Meta:
         model = OrderChild
@@ -1287,7 +1314,7 @@ class FormOrderChild(ModelForm):
         }
 
 
-class FormOrderCSChild(ModelForm):
+class FormOrderCSChild(OrderChildBirthValidationMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormOrderCSChild, self).__init__(*args, **kwargs)
         self.label_suffix = ''
@@ -1302,6 +1329,7 @@ class FormOrderCSChild(ModelForm):
         self.fields['child_mother'].label = 'Nama Ibu'
         self.fields['child_mother'].widget = forms.TextInput(
             attrs={'class': 'form-control-sm'})
+        self._setup_child_birth_field()
 
     class Meta:
         model = OrderChild
@@ -1313,7 +1341,7 @@ class FormOrderCSChild(ModelForm):
         }
 
 
-class FormOrderChildUpdate(ModelForm):
+class FormOrderChildUpdate(OrderChildBirthValidationMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormOrderChildUpdate, self).__init__(*args, **kwargs)
         self.label_suffix = ''
@@ -1328,6 +1356,7 @@ class FormOrderChildUpdate(ModelForm):
         self.fields['child_mother'].label = 'Nama Ibu'
         self.fields['child_mother'].widget = forms.TextInput(
             attrs={'class': 'form-control-sm'})
+        self._setup_child_birth_field()
 
     class Meta:
         model = OrderChild

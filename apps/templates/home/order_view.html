@@ -1452,11 +1452,49 @@
         orderForm.submit();
     });
 
+    function parseFormattedNumber(value) {
+        return parseInt(String(value || '').replace(/[^\d]/g, ''), 10) || 0;
+    }
+
+    function getSelectedOptionExtraPrice(select) {
+        if (!select || !select.options || select.selectedIndex < 0) {
+            return 0;
+        }
+
+        const selectedText = select.options[select.selectedIndex].text || '';
+        const match = selectedText.match(/\(\+\s*Rp\s*([\d.,]+)/i);
+        return match ? parseFormattedNumber(match[1]) : 0;
+    }
+
+    function setPackageTotal(form) {
+        if (!form) {
+            return;
+        }
+
+        const quantityInput = form.querySelector('input[name="quantity"]');
+        const totalPriceInput = form.querySelector('input[name="total_price"]');
+        const beverageSelect = form.querySelector('select[name="beverage"], select[name="beverages"]');
+        const visibleUnitPriceInput = Array.from(form.querySelectorAll('input[name="male_price"], input[name="female_price"]'))
+            .find((input) => !input.classList.contains('d-none'));
+
+        if (!quantityInput || !totalPriceInput || !visibleUnitPriceInput) {
+            return;
+        }
+
+        const quantity = parseInt(quantityInput.value, 10) || 0;
+        const unitPrice = parseFormattedNumber(visibleUnitPriceInput.value);
+        const beverageExtraPrice = getSelectedOptionExtraPrice(beverageSelect);
+
+        totalPriceInput.value = (quantity * unitPrice) + (beverageExtraPrice * quantity);
+    }
+
     btnSavePaket.addEventListener('click', function () {
+        setPackageTotal(packForm);
         packForm.submit();
     });
 
     btnEditPaket.addEventListener('click', function () {
+        setPackageTotal(editPackForm);
         editPackForm.action = "{% url 'order-package-cs-update' data.order_id cat pack type %}";
         editPackForm.submit();
     });
@@ -1534,14 +1572,6 @@
             'cell-border': true,
             'order': [[0, 'asc']],
         });
-    });
-
-    btnSavePaket.addEventListener('click', function () {
-        let quantity = document.getElementById('id-quantity').value;
-        let unitPrice = document.getElementById('id-unit-price').value;
-        let totalPrice = document.getElementById('id-total-price');
-
-        totalPrice.value = quantity * unitPrice;
     });
 
     c.forEach(function(checkbox, index) {

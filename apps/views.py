@@ -6651,7 +6651,8 @@ def order_archive(request, _branch, _date):
             Q(order_id__icontains=search_query) |
             Q(customer_name__icontains=search_query) |
             Q(cs__icontains=search_query) |
-            Q(regional__area_name__icontains=search_query)
+            Q(regional__area_name__icontains=search_query) |
+            Q(order_status__icontains=search_query)
         )
 
     br_order = all_orders.values_list('regional', flat=True).distinct()
@@ -6705,7 +6706,8 @@ def order_index(request, _branch, _date):
             Q(order_id__icontains=search_query) |
             Q(customer_name__icontains=search_query) |
             Q(cs__icontains=search_query) |
-            Q(regional__area_name__icontains=search_query)
+            Q(regional__area_name__icontains=search_query) |
+            Q(order_status__icontains=search_query)
         )
 
     br_order = all_orders.values_list('regional', flat=True).distinct()
@@ -7029,6 +7031,7 @@ def cashin_index(request):
             Q(order__order_id__icontains=search_query) |
             Q(order__customer_name__icontains=search_query) |
             Q(order__regional__area_name__icontains=search_query) |
+            Q(order__order_status__icontains=search_query) |
             Q(bank__icontains=search_query) |
             Q(cashin_note__icontains=search_query) |
             Q(entry_by__icontains=search_query)
@@ -7465,6 +7468,9 @@ def order_invoice(request, _id):
                     f"{addon.equipment.equipment_name} ({addon.quantity})")
             desc_lines.append('+ ' + ', '.join(parts))
 
+        if pkg.beverage:
+            desc_lines.append(f"Minuman: {pkg.beverage}")
+
         if pkg.souvenir:
             desc_lines.append(f"Souvenir: {pkg.souvenir}")
 
@@ -7529,24 +7535,51 @@ def order_invoice(request, _id):
 
         up_line_idx = None
         addon_line_idx = None
+        beverage_line_idx = None
         for idx, line in enumerate(desc_lines):
             if line.startswith('Up:') and up_line_idx is None:
                 up_line_idx = idx
             if line.startswith('+ ') and addon_line_idx is None:
                 addon_line_idx = idx
+            if line.startswith('Minuman:') and beverage_line_idx is None:
+                beverage_line_idx = idx
 
-        if pkg.upgrade and up_line_idx is not None:
-            upgrade_price = pkg.extra_price
-            total += upgrade_price
-            up_str = "{:,}".format(upgrade_price)
+        beverage_extra_total = 0
+        if pkg.beverage:
+            selected_beverage = Beverage.objects.filter(
+                package_id=pkg.package_id,
+                equipment__equipment_name=pkg.beverage
+            ).first()
+            if selected_beverage and selected_beverage.extra_price > 0:
+                box_multiplier = pkg.package.box if pkg.package.box and pkg.package.box > 0 else 1
+                beverage_extra_total = selected_beverage.extra_price * box_multiplier * pkg.quantity
+
+        package_extra_total = pkg.extra_price or 0
+        beverage_extra_total = min(beverage_extra_total, package_extra_total)
+        other_extra_total = package_extra_total - beverage_extra_total
+
+        if package_extra_total > 0:
+            total += package_extra_total
+
+        if other_extra_total > 0:
+            up_str = "{:,}".format(other_extra_total)
 
             lines_before_up = _desc_wrapped_line_count(
-                desc_lines[:up_line_idx])
-            # Avoid overlapping line 0 with base total.
+                desc_lines[:up_line_idx]) if up_line_idx is not None else _desc_wrapped_line_count(desc_lines[:beverage_line_idx]) if beverage_line_idx is not None else 1
             target_line = lines_before_up if lines_before_up > 0 else 1
             while len(money_lines) <= target_line:
                 money_lines.append('')
             money_lines[target_line] = up_str
+
+        if beverage_extra_total > 0:
+            beverage_str = "{:,}".format(beverage_extra_total)
+
+            lines_before_beverage = _desc_wrapped_line_count(
+                desc_lines[:beverage_line_idx]) if beverage_line_idx is not None else _desc_wrapped_line_count(desc_lines[:up_line_idx]) if up_line_idx is not None else 1
+            target_line = lines_before_beverage if lines_before_beverage > 0 else 1
+            while len(money_lines) <= target_line:
+                money_lines.append('')
+            money_lines[target_line] = beverage_str
 
         if addons.exists() and addon_line_idx is not None:
             total_addon = 0
@@ -7963,6 +7996,9 @@ def order_bap(request, _id):
                     f"{addon.equipment.equipment_name} ({addon.quantity})")
             desc_lines.append('+ ' + ', '.join(parts))
 
+        if pkg.beverage:
+            desc_lines.append(f"Minuman: {pkg.beverage}")
+
         if pkg.souvenir:
             desc_lines.append(f"Souvenir: {pkg.souvenir}")
 
@@ -8016,20 +8052,45 @@ def order_bap(request, _id):
 
         up_line_idx = None
         addon_line_idx = None
+        beverage_line_idx = None
         for idx, line in enumerate(desc_lines):
             if line.startswith('Up:') and up_line_idx is None:
                 up_line_idx = idx
             if line.startswith('+ ') and addon_line_idx is None:
                 addon_line_idx = idx
+            if line.startswith('Minuman:') and beverage_line_idx is None:
+                beverage_line_idx = idx
 
-        if pkg.upgrade and up_line_idx is not None:
-            upgrade_price = pkg.extra_price
-            total += upgrade_price
-            target_line = _desc_wrapped_line_count(desc_lines[:up_line_idx])
+        beverage_extra_total = 0
+        if pkg.beverage:
+            selected_beverage = Beverage.objects.filter(
+                package_id=pkg.package_id,
+                equipment__equipment_name=pkg.beverage
+            ).first()
+            if selected_beverage and selected_beverage.extra_price > 0:
+                box_multiplier = pkg.package.box if pkg.package.box and pkg.package.box > 0 else 1
+                beverage_extra_total = selected_beverage.extra_price * box_multiplier * pkg.quantity
+
+        package_extra_total = pkg.extra_price or 0
+        beverage_extra_total = min(beverage_extra_total, package_extra_total)
+        other_extra_total = package_extra_total - beverage_extra_total
+
+        if package_extra_total > 0:
+            total += package_extra_total
+
+        if other_extra_total > 0:
+            target_line = _desc_wrapped_line_count(desc_lines[:up_line_idx]) if up_line_idx is not None else _desc_wrapped_line_count(desc_lines[:beverage_line_idx]) if beverage_line_idx is not None else 1
             target_line = target_line if target_line > 0 else 1
             while len(money_lines) <= target_line:
                 money_lines.append('')
-            money_lines[target_line] = "{:,}".format(upgrade_price)
+            money_lines[target_line] = "{:,}".format(other_extra_total)
+
+        if beverage_extra_total > 0:
+            target_line = _desc_wrapped_line_count(desc_lines[:beverage_line_idx]) if beverage_line_idx is not None else _desc_wrapped_line_count(desc_lines[:up_line_idx]) if up_line_idx is not None else 1
+            target_line = target_line if target_line > 0 else 1
+            while len(money_lines) <= target_line:
+                money_lines.append('')
+            money_lines[target_line] = "{:,}".format(beverage_extra_total)
 
         if addons.exists() and addon_line_idx is not None:
             total_addon = 0
@@ -8352,12 +8413,10 @@ def order_checklist(request, _id):
                 y -= 5
                 pdf_file.line(35, y, page_width - 35, y)
 
-        beverage = Beverage.objects.filter(
-            package_id=package[i].package_id, default=True)
-        if beverage.count() > 0:
+        if package[i].beverage:
             y -= 20
             pdf_file.rect(40, y, 80, 15, stroke=True)
-            pdf_file.drawString(140, y + 5, str(beverage[0].equipment))
+            pdf_file.drawString(140, y + 5, package[i].beverage)
             y -= 5
             pdf_file.line(35, y, page_width - 35, y)
 

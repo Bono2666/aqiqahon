@@ -46,10 +46,9 @@
                 </div>
                 <div class="row mb-3">
                     <div class="col-12 col-md-6">
-                        <form method="get">
+                        <form method="get" id="search-form">
                             <div class="input-group input-group-outline">
-                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Cari invoice, pemesan, bank, catatan, cabang" value="{{ search_query }}">
-                                <button class="btn btn-sm bg-gradient-dark mb-0" type="submit">Cari</button>
+                                <input type="text" name="search" id="search-input" class="form-control form-control-sm" placeholder="Cari invoice, pemesan, bank, catatan, cabang, status" value="{{ search_query }}" autocomplete="off">
                             </div>
                         </form>
                     </div>
@@ -161,6 +160,46 @@
                 'zeroRecords': 'Tidak ada data'
             }
         });
+
+        const searchForm = document.getElementById('search-form');
+        const searchInput = document.getElementById('search-input');
+        const searchFocusStorageKey = 'cashin-index-search-focus';
+        let searchTimer;
+
+        if (searchForm && searchInput) {
+            const savedFocusState = sessionStorage.getItem(searchFocusStorageKey);
+
+            if (savedFocusState) {
+                try {
+                    const parsedState = JSON.parse(savedFocusState);
+
+                    if (parsedState.value === searchInput.value) {
+                        searchInput.focus();
+
+                        const cursorPosition = typeof parsedState.cursorPosition === 'number'
+                            ? parsedState.cursorPosition
+                            : searchInput.value.length;
+
+                        searchInput.setSelectionRange(cursorPosition, cursorPosition);
+                    }
+                } catch (error) {
+                    console.warn('Failed to restore search focus state', error);
+                }
+
+                sessionStorage.removeItem(searchFocusStorageKey);
+            }
+
+            searchInput.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    sessionStorage.setItem(searchFocusStorageKey, JSON.stringify({
+                        value: searchInput.value,
+                        cursorPosition: searchInput.selectionStart
+                    }));
+                    searchForm.submit();
+                }, 350);
+            });
+        }
     });
 
     $(document).on('click', 'tbody tr', function() {

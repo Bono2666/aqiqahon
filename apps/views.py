@@ -7727,7 +7727,9 @@ def order_invoice(request, _id):
     y2 -= 12
     pdf_file.drawString(text_x, y2, child[0].child_mother)
 
-    y -= 81
+    # Place this block two lines below the wrapped order note so it follows
+    # note height dynamically instead of using a fixed offset.
+    y -= 36
     pdf_file.setFont("Helvetica-Bold", 8)
     pdf_file.drawString(
         35, y, 'Sertifikat dan Kartu Ucapan pakai foto atau tidak?')

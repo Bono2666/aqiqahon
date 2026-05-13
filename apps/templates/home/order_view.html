@@ -194,7 +194,7 @@
                                 <div class="col-md-3">
                                     <div class="shadow-none">
                                         <label class="form-control-label" for="id-discount">Diskon</label>
-                                        <input type="number" min="0" required name="discount" id="id-discount" class="form-control form-control-sm" value="{{ data.discount|intcomma }}" {% if crud == 'view' %}readonly{% endif %}>
+                                        <input type="number" min="0" required name="discount" id="id-discount" class="form-control form-control-sm" value="{{ data.discount|default_if_none:0 }}" {% if crud == 'view' %}readonly{% endif %}>
                                     </div>
                                 </div>
                                 <div class="col-md-3">
@@ -734,7 +734,7 @@
                                     <div class="form-group shadow-none mb-0">
                                         <label for="rice">Pilihan Nasi</label>
                                         <select name="rice" class="form-control form-select-sm" required>
-                                            {% for rice in rices %}"
+                                            {% for rice in rices %}
                                             <option value="{{ rice.cuisine.cuisine_name }}" {% if rice.default == 1 %}selected{% endif %}>{{ rice.cuisine.cuisine_name }}{% if rice.extra_price > 0 %} (+ Rp {{ rice.extra_price|intcomma }}/box){% endif %}</option>
                                             {% endfor %}
                                         </select>
@@ -845,7 +845,7 @@
                                     <div class="form-group shadow-none mb-0">
                                         <label for="bag">Pilihan Kemasan Kantong</label>
                                         <select name="bag" class="form-control form-select-sm">
-                                            {% for bag in bags %}"
+                                            {% for bag in bags %}
                                             <option value="{{ bag.equipment.equipment_name }}" {% if bag.default == 1 %}selected{% endif %}>{{ bag.equipment.equipment_name }}{% if bag.extra_price > 0 %} (+ Rp {{ bag.extra_price|intcomma }}/box){% endif %}</option>
                                             {% endfor %}
                                         </select>
@@ -927,7 +927,7 @@
                 <div class="modal-header">
                     <h5 class="modal-title" id="ModalLabel">Ubah Paket</h5>
                 </div>
-                <form id="editPackForm" method="post" action="" enctype="multipart/form-data">
+                <form id="editPackForm" method="post" action="{% url 'order-package-cs-update' data.order_id cat pack type %}" enctype="multipart/form-data">
                     {% csrf_token %}
                     <div class="modal-body border-bottom-0">
                         <div class="pl-lg-0">
@@ -1000,7 +1000,7 @@
                                     <div class="form-group shadow-none mb-0">
                                         <label for="rice">Pilihan Nasi</label>
                                         <select name="rice" class="form-control form-select-sm" required>
-                                            {% for rice in rices %}"
+                                            {% for rice in rices %}
                                             <option value="{{ rice.cuisine.cuisine_name }}" {% if upd_package.rice %}{% if rice.cuisine.cuisine_name == upd_package.rice %}selected{% endif %}{% else %}{% if rice.default == 1 %}selected{% endif %}{% endif %}>{{ rice.cuisine.cuisine_name }}{% if rice.extra_price > 0 %} (+ Rp {{ rice.extra_price|intcomma }}/box){% endif %}</option>
                                             {% endfor %}
                                         </select>
@@ -1111,7 +1111,7 @@
                                     <div class="form-group shadow-none mb-0">
                                         <label for="bag">Pilihan Kemasan Kantong</label>
                                         <select name="bag" class="form-control form-select-sm">
-                                            {% for bag in bags %}"
+                                            {% for bag in bags %}
                                             <option value="{{ bag.equipment.equipment_name }}" {% if upd_package.bag %}{% if bag.equipment.equipment_name == upd_package.bag %}selected{% endif %}{% else %}{% if bag.default == 1 %}selected{% endif %}{% endif %}>{{ bag.equipment.equipment_name }}{% if bag.extra_price > 0 %} (+ Rp {{ bag.extra_price|intcomma }}/box){% endif %}</option>
                                             {% endfor %}
                                         </select>
@@ -1141,7 +1141,7 @@
                                     <div class="form-group shadow-none mb-0">
                                         <label for="souvenir">Souvenir</label>
                                         <select name="souvenir" class="form-control form-select-sm" required>
-                                            {% for souvenir in souvenirs %}"
+                                            {% for souvenir in souvenirs %}
                                             <option value="{{ souvenir.equipment.equipment_name }}" {% if upd_package.souvenir %}{% if souvenir.equipment.equipment_name == upd_package.souvenir %}selected{% endif %}{% else %}{% if souvenir.default == 1 %}selected{% endif %}{% endif %}>{{ souvenir.equipment.equipment_name }}{% if souvenir.extra_price > 0 %} (+ Rp {{ souvenir.extra_price|intcomma }}){% endif %}</option>
                                             {% endfor %}
                                         </select>
@@ -1331,7 +1331,7 @@
                     <div class="modal-footer border-0">
                         <a href="{% url 'order-view' id cat pack type crud_det %}" role="button"
                             class="btn btn-sm bg-gradient-dark">Batal</a>
-                        <button id="save-addon" class="btn btn-sm bg-gradient-primary text-white {% if archive %}disabled{% endif %}">Simpan
+                        <button type="button" id="save-addon" class="btn btn-sm bg-gradient-primary text-white {% if archive %}disabled{% endif %}">Simpan
                         </button>
                     </div>
                     {% endif %}
@@ -1408,8 +1408,6 @@
     let form = document.getElementById('form-addon');
     let formSouvenir = document.getElementById('form-souvenir');
     let checks = document.getElementsByName('souvenir[]');
-    let c = document.querySelectorAll('.checks');
-    let q = document.querySelectorAll('.qty');
     let dialogSouvenir = document.getElementById('dialog-souvenir');
     let dialogAddon = document.getElementById('dialog-addon');
     let save = document.getElementById('save-addon');
@@ -1448,9 +1446,11 @@
         modalEdit._config.keyboard = false;
     }
 
-    btnSaveOrder.addEventListener('click', function () {
-        orderForm.submit();
-    });
+    if (btnSaveOrder && orderForm) {
+        btnSaveOrder.addEventListener('click', function () {
+            orderForm.submit();
+        });
+    }
 
     function parseFormattedNumber(value) {
         return parseInt(String(value || '').replace(/[^\d]/g, ''), 10) || 0;
@@ -1474,47 +1474,107 @@
         const quantityInput = form.querySelector('input[name="quantity"]');
         const totalPriceInput = form.querySelector('input[name="total_price"]');
         const beverageSelect = form.querySelector('select[name="beverage"], select[name="beverages"]');
-        const visibleUnitPriceInput = Array.from(form.querySelectorAll('input[name="male_price"], input[name="female_price"]'))
-            .find((input) => !input.classList.contains('d-none'));
+        const unitInputs = form.querySelectorAll('input[name="male_price"], input[name="female_price"]');
 
-        if (!quantityInput || !totalPriceInput || !visibleUnitPriceInput) {
+        if (!quantityInput || !totalPriceInput) {
             return;
         }
 
+        let unitPrice = 0;
+        const visibleUnitPriceInput = Array.from(unitInputs).find((input) => !input.classList.contains('d-none'));
+        if (visibleUnitPriceInput) {
+            unitPrice = parseFormattedNumber(visibleUnitPriceInput.value);
+        } else if (unitInputs.length) {
+            unitPrice = Math.max(...Array.from(unitInputs).map((input) => parseFormattedNumber(input.value)));
+        }
+
         const quantity = parseInt(quantityInput.value, 10) || 0;
-        const unitPrice = parseFormattedNumber(visibleUnitPriceInput.value);
         const beverageExtraPrice = getSelectedOptionExtraPrice(beverageSelect);
 
         totalPriceInput.value = (quantity * unitPrice) + (beverageExtraPrice * quantity);
     }
 
-    btnSavePaket.addEventListener('click', function () {
-        setPackageTotal(packForm);
-        packForm.submit();
-    });
+    function submitDetachedForm(sourceForm, actionUrl) {
+        if (!sourceForm || !actionUrl) {
+            return;
+        }
 
-    btnEditPaket.addEventListener('click', function () {
-        setPackageTotal(editPackForm);
-        editPackForm.action = "{% url 'order-package-cs-update' data.order_id cat pack type %}";
-        editPackForm.submit();
-    });
+        const tempForm = document.createElement('form');
+        tempForm.method = 'post';
+        tempForm.action = actionUrl;
+        tempForm.style.display = 'none';
 
-    if (gotPromo && inputPromo.value == '' && cat == '0' && pack == '0' && type == '0' && crudStatus == '0' && crud == 'view') {
+        sourceForm.querySelectorAll('input, select, textarea').forEach(function(field) {
+            if (!field.name || field.disabled) {
+                return;
+            }
+
+            if ((field.type === 'checkbox' || field.type === 'radio') && !field.checked) {
+                return;
+            }
+
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = field.name;
+            hiddenInput.value = field.value;
+            tempForm.appendChild(hiddenInput);
+        });
+
+        document.body.appendChild(tempForm);
+        tempForm.submit();
+    }
+
+    if (packForm) {
+        packForm.addEventListener('submit', function () {
+            setPackageTotal(packForm);
+        });
+    }
+
+    if (editPackForm) {
+        editPackForm.addEventListener('submit', function () {
+            setPackageTotal(editPackForm);
+        });
+    }
+
+    if (btnSavePaket && packForm) {
+        btnSavePaket.addEventListener('click', function () {
+            setPackageTotal(packForm);
+            packForm.requestSubmit ? packForm.requestSubmit() : packForm.submit();
+        });
+    }
+
+    if (btnEditPaket && editPackForm) {
+        btnEditPaket.addEventListener('click', function () {
+            setPackageTotal(editPackForm);
+            if (!editPackForm.checkValidity()) {
+                editPackForm.reportValidity();
+                return;
+            }
+            submitDetachedForm(editPackForm, "{% url 'order-package-cs-update' data.order_id cat pack type %}");
+        });
+    }
+
+    if (gotPromo === 'True' && inputPromo && inputPromo.value == '' && cat == '0' && pack == '0' && type == '0' && crudStatus == '0' && crud == 'view') {
         alert('Anda belum memilih hadiah promo. Silakan pilih hadiah promo.');
     }
 
-    save.addEventListener('click', function() {
-        let check = [];
-        let qty = [];
-        c.forEach(function(checkbox, index) {
-            if (c[index].checked == true) {
-                check.push(c[index].value);
-                qty.push(q[index].value);
-            }
+    if (save && form) {
+        save.addEventListener('click', function(event) {
+            event.preventDefault();
+            let check = [];
+            let qty = [];
+            let addonChecks = form.querySelectorAll('.checks');
+            let addonQty = form.querySelectorAll('.qty');
+            addonChecks.forEach(function(checkbox, index) {
+                if (addonChecks[index].checked == true) {
+                    check.push(addonChecks[index].value);
+                    qty.push(addonQty[index].value);
+                }
+            });
+            form.action = "{% url 'order-view' id cat pack type crud_det %}?checks=" + check + "&qty=" + qty;
+            form.submit();
         });
-        form.action = "{% url 'order-view' id cat pack type crud_det %}?checks=" + check + "&qty=" + qty;
-        form.submit();
-    });
+    }
 
     $(document).ready(function () {
         $('#childTable').DataTable({

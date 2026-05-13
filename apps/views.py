@@ -36,6 +36,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.lib.utils import simpleSplit
 from crum import get_current_user
 from apps.notifications import order_notification
 import re
@@ -6399,11 +6400,11 @@ def _validate_delivery_date_not_past(value):
         return None
 
     try:
-        delivery_day = datetime.date.fromisoformat(value)
+        delivery_day = date.fromisoformat(value)
     except (TypeError, ValueError):
         return 'Format tanggal pengiriman tidak valid.'
 
-    if delivery_day < datetime.date.today():
+    if delivery_day < date.today():
         return 'Tanggal pengiriman tidak boleh kurang dari hari ini.'
 
     return None
@@ -6788,45 +6789,49 @@ def order_view(request, _id, _cat, _pack, _type, _crud):
     if request.POST:
         check = request.GET.get('checks')
         qty = request.GET.get('qty')
-        _ids = check.split(',')
-        _qty = qty.split(',')
-        _qty_idx = 0
-        # delete all addons first
-        OrderPackageAddon.objects.filter(
-            order_id=_id, package_id=_pack).delete()
 
-        for ix, i in enumerate(addons):
-            if str(i[0]) in _ids:
-                try:
-                    _addon = OrderPackageAddon(
-                        order_id=_id, package_id=_pack, equipment_id=i[0], unit_price=i[2])
-                    _addon.save()
-                    _update = OrderPackageAddon.objects.get(
-                        order_id=_id, package_id=_pack, equipment_id=i[0])
-                    _update.quantity = int(_qty[_qty_idx])
-                    _update.save()
-                except IntegrityError:
-                    _update = OrderPackageAddon.objects.get(
-                        order_id=_id, package_id=_pack, equipment_id=i[0])
-                    _update.quantity = int(_qty[_qty_idx])
-                    _update.save()
-                    continue
+        if check is not None or qty is not None:
+            _ids = [item for item in (check or '').split(',') if item]
+            _qty = [item for item in (qty or '').split(',') if item != '']
+            _qty_idx = 0
 
-                _qty_idx += 1
+            # delete all addons first
+            OrderPackageAddon.objects.filter(
+                order_id=_id, package_id=_pack).delete()
 
-            else:
-                OrderPackageAddon.objects.filter(
-                    order_id=_id, package_id=_pack, equipment_id=i[0]).delete()
+            for ix, i in enumerate(addons):
+                if str(i[0]) in _ids:
+                    addon_qty = int(_qty[_qty_idx]) if _qty_idx < len(_qty) else 0
+                    try:
+                        _addon = OrderPackageAddon(
+                            order_id=_id, package_id=_pack, equipment_id=i[0], unit_price=i[2])
+                        _addon.save()
+                        _update = OrderPackageAddon.objects.get(
+                            order_id=_id, package_id=_pack, equipment_id=i[0])
+                        _update.quantity = addon_qty
+                        _update.save()
+                    except IntegrityError:
+                        _update = OrderPackageAddon.objects.get(
+                            order_id=_id, package_id=_pack, equipment_id=i[0])
+                        _update.quantity = addon_qty
+                        _update.save()
+                        continue
 
-        _addon_order = OrderPackageAddon.objects.filter(
-            order_id=_id, package_id=_pack)
-        for idx, j in enumerate(_addon_order):
-            addon_order += j.equipment.equipment_name + \
-                ' (' + str(j.quantity) + ')'
-            if idx < _addon_order.count() - 1:
-                addon_order += ', '
+                    _qty_idx += 1
 
-        return HttpResponseRedirect(reverse('order-view', args=[_id, _cat, _pack, _type, _crud]))
+                else:
+                    OrderPackageAddon.objects.filter(
+                        order_id=_id, package_id=_pack, equipment_id=i[0]).delete()
+
+            _addon_order = OrderPackageAddon.objects.filter(
+                order_id=_id, package_id=_pack)
+            for idx, j in enumerate(_addon_order):
+                addon_order += j.equipment.equipment_name + \
+                    ' (' + str(j.quantity) + ')'
+                if idx < _addon_order.count() - 1:
+                    addon_order += ', '
+
+            return HttpResponseRedirect(reverse('order-view', args=[_id, _cat, _pack, _type, _crud]))
 
     msg = form.errors
     context = {
@@ -8254,6 +8259,25 @@ def order_checklist(request, _id):
     filename = 'CHECKLIST_' + customer_name + '_' + order_id + '.pdf'
     pdf_file = canvas.Canvas(filename)
 
+    def checklist_draw_wrapped_field(cvs, page_w, col_x, y, label, value,
+                                     font='Helvetica', size=8, line_height=12):
+        text = str(value) if value is not None else ''
+        text = text.replace('\r', ' ').replace('\n', ' ')
+        value_x = col_x + 90
+        max_w = max(40.0, page_w - 35 - value_x)
+        cvs.setFont(font, size)
+        lines = simpleSplit(text.strip(), font, size, max_w) if text.strip() else ['']
+        if not lines:
+            lines = ['']
+        cvs.drawString(col_x, y, label)
+        cvs.drawString(col_x + 80, y, ':')
+        cvs.drawString(value_x, y, lines[0])
+        y -= line_height
+        for line in lines[1:]:
+            cvs.drawString(value_x, y, line)
+            y -= line_height
+        return y
+
     for i in range(0, package.count()):
         # Add logo in the top left corner
         try:
@@ -8275,6 +8299,7 @@ def order_checklist(request, _id):
         # Add address below logo
         pdf_file.setFont("Helvetica", 8)
         pdf_file.drawString(35, 725, 'Cabang :')
+        title_x = (page_width / 2) + 35
 
         # Add regional info beside regional title with bold font
         pdf_file.setFont("Helvetica-Bold", 8)
@@ -8284,8 +8309,11 @@ def order_checklist(request, _id):
         address = 'Kantor : ' + str_address
         y = 713
         if str_address:
-            pdf_file.drawString(35, y, address)
-            y -= 12
+            max_left_width = max(120, title_x - 60)
+            address_lines = simpleSplit(address, "Helvetica", 8, max_left_width)
+            for line in address_lines:
+                pdf_file.drawString(35, y, line)
+                y -= 12
         str_district = order.regional.district if order.regional.district else ''
         str_city = order.regional.city if order.regional.city else ''
         str_postal_code = order.regional.postal_code if order.regional.postal_code else ''
@@ -8294,53 +8322,44 @@ def order_checklist(request, _id):
         comma_city = ', ' if str_city and str_postal_code else ''
         city = str_district + comma_district + str_city + comma_city + str_postal_code
         if city:
-            pdf_file.drawString(35, y, city)
-            y -= 12
+            max_left_width = max(120, title_x - 60)
+            city_lines = simpleSplit(city, "Helvetica", 8, max_left_width)
+            for line in city_lines:
+                pdf_file.drawString(35, y, line)
+                y -= 12
         phone = 'Telp/Whatsapp : 0812 9658 9090'
         pdf_file.drawString(35, y, phone)
         web = 'www.sahabataqiqah.co.id'
         pdf_file.drawString(35, y - 12, web)
+        y_left_bottom = y - 12
 
-        y = 745
-        # Add title start from the middle of page
-        title = "No. Invoice"
-        page_width, _ = A4
-        title_x = (page_width / 2) + 35
-        pdf_file.drawString(title_x, y, title)
-        pdf_file.drawString(title_x + 80, y, ':')
-        pdf_file.drawString(title_x + 90, y, order.order_id)
-        y -= 12
-        pdf_file.drawString(title_x, y, "Nama Pemesan")
-        pdf_file.drawString(title_x + 80, y, ':')
-        pdf_file.drawString(title_x + 90, y, order.customer_name)
-        y -= 12
-        pdf_file.drawString(title_x, y, "Tanggal Delivery")
-        pdf_file.drawString(title_x + 80, y, ':')
-        pdf_file.drawString(title_x + 90, y, order.delivery_date.strftime(
-            '%-d ') + bulan[order.delivery_date.month - 1] + order.delivery_date.strftime(' %Y'))
-        y -= 12
-        pdf_file.drawString(title_x, y, "Checker")
-        pdf_file.drawString(title_x + 80, y, ':')
-        pdf_file.drawString(title_x + 90, y, '______________________')
-        y -= 12
-        pdf_file.drawString(title_x, y, "Driver")
-        pdf_file.drawString(title_x + 80, y, ':')
-        pdf_file.drawString(title_x + 90, y, '______________________')
-        y -= 12
-        pdf_file.drawString(title_x, y, "Menu")
-        pdf_file.drawString(title_x + 80, y, ':')
+        col_x = title_x
+        yr = 745
+        yr = checklist_draw_wrapped_field(
+            pdf_file, page_width, col_x, yr, "No. Invoice", order.order_id)
+        yr = checklist_draw_wrapped_field(
+            pdf_file, page_width, col_x, yr, "Nama Pemesan", order.customer_name)
+        delivery_str = order.delivery_date.strftime(
+            '%-d ') + bulan[order.delivery_date.month - 1] + order.delivery_date.strftime(' %Y')
+        yr = checklist_draw_wrapped_field(
+            pdf_file, page_width, col_x, yr, "Tanggal Delivery", delivery_str)
+        yr = checklist_draw_wrapped_field(
+            pdf_file, page_width, col_x, yr, "Checker", '______________________')
+        yr = checklist_draw_wrapped_field(
+            pdf_file, page_width, col_x, yr, "Driver", '______________________')
         category_clean = re.sub(r'\s*\([^)]*\)',
                                 '', package[i].category.category_name)
-        pdf_file.drawString(
-            title_x + 90, y, f"{category_clean} - {package[i].package.package_name}")
-        y -= 12
-        pdf_file.drawString(title_x, y, "Jumlah Box/Porsi")
-        pdf_file.drawString(title_x + 80, y, ':')
+        menu_text = f"{category_clean} - {package[i].package.package_name}"
+        yr = checklist_draw_wrapped_field(
+            pdf_file, page_width, col_x, yr, "Menu", menu_text)
         box = package[i].package.box if package[i].package.box > 0 else 1
         qty = package[i].quantity
         box_type = package[i].box_type if package[i].box_type else ''
-        pdf_file.drawString(title_x + 90, y, str(box * qty) + ' ' + box_type)
+        box_text = (str(box * qty) + ' ' + box_type).strip()
+        yr = checklist_draw_wrapped_field(
+            pdf_file, page_width, col_x, yr, "Jumlah Box/Porsi", box_text)
 
+        y = min(y_left_bottom, yr)
         y -= 30
         pdf_file.setFont("Helvetica-Bold", 8)
         pdf_file.line(35, y, page_width - 35, y)
@@ -8412,6 +8431,21 @@ def order_checklist(request, _id):
                 pdf_file.drawString(140, y + 5, str(other[j].equipment))
                 y -= 5
                 pdf_file.line(35, y, page_width - 35, y)
+
+        package_addons = OrderPackageAddon.objects.filter(
+            order=order, package=package[i].package
+        ).select_related('equipment')
+        for addon in package_addons:
+            if addon.equipment is None:
+                continue
+            addon_label = addon.equipment.equipment_name
+            if addon.quantity and addon.quantity > 1:
+                addon_label = addon_label + ' (x' + str(addon.quantity) + ')'
+            y -= 20
+            pdf_file.rect(40, y, 80, 15, stroke=True)
+            pdf_file.drawString(140, y + 5, addon_label)
+            y -= 5
+            pdf_file.line(35, y, page_width - 35, y)
 
         if package[i].beverage:
             y -= 20

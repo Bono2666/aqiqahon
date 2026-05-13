@@ -4,6 +4,23 @@
 
 {% block content %}
 
+<style>
+    @media (max-width: 991.98px) {
+        .order-view-mobile-dropdown {
+            position: relative;
+            z-index: 1055;
+        }
+
+        .order-view-mobile-dropdown .dropdown-menu {
+            z-index: 1060;
+        }
+
+        .order-view-mobile-card {
+            overflow: visible;
+        }
+    }
+</style>
+
 {% load my_filter %}
 
 {% load humanize %}
@@ -17,7 +34,7 @@
         <div class="row">
             <div class="col-xl-12 order-xl-1">
                 {% csrf_token %}
-                <div class="card {% if request|is_mobile %}z-index-0{% endif %}">
+                <div class="card order-view-mobile-card {% if request|is_mobile %}z-index-0{% endif %}">
                     <div class="card-header">
                         <div class="row">
                             <div class="{% if request|is_mobile %}col-10{% else %}col-6{% endif %} d-flex align-items-center">
@@ -25,10 +42,10 @@
                             </div>
                             {% if request|is_mobile %}
                             <div class="col-2 text-end">
-                                <div class="dropdown float-lg-end pe-2">
-                                    <a class="cursor-pointer text-body" id="dropdownTable" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="dropdown float-lg-end pe-2 order-view-mobile-dropdown">
+                                    <button type="button" class="btn btn-link text-body p-0 border-0 shadow-none" id="dropdownTable" aria-expanded="false">
                                         <i class="fas fa-ellipsis-v"></i>
-                                    </a>
+                                    </button>
                                     <ul class="dropdown-menu px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
                                         <li><a class="dropdown-item border-radius-md" href="{% if archive %}{% url 'order-archive' 'all' '0' %}{% else %}{% if crud == 'view' %}{% url 'order-index' 'all' '0' %}{% else %}{% url 'order-view' data.order_id '0' '0' '0' '0' %}{% endif %}{% endif %}">{% if crud == 'view' %}Kembali{% else %}Batal{% endif %}</a></li>
                                         <li><a class="dropdown-item border-radius-md" {% if not btn.edit and not request.user.is_superuser %}hidden{% endif %}{% if status == 'BATAL' %}hidden{% endif %} {% if crud == 'update' %}hidden{% endif %} {% if archive %}hidden{% endif %} href="{% url 'order-cs-update' data.order_id '0' '0' '0' %}">Ubah</a></li>
@@ -292,9 +309,9 @@
                     <div class="col-4 text-end">
                         {% if request|is_mobile %}
                         <div class="dropdown float-lg-end pe-2" {% if status == 'BATAL' or status == 'SELESAI' %}hidden{% else %}{% if not btn.edit and not request.user.is_superuser %}hidden{% endif %} {% if crud == 'update' %}hidden{% endif %}{% endif %} {% if archive %}hidden{% endif %}>
-                            <a class="cursor-pointer text-body" id="dropdownAnak" data-bs-toggle="dropdown" aria-expanded="false">
+                            <button type="button" class="btn btn-link text-body p-0 border-0 shadow-none" id="dropdownAnak" aria-expanded="false">
                                 <i class="fas fa-ellipsis-v"></i>
-                            </a>
+                            </button>
                             <ul class="dropdown-menu px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownAnak">
                                 <li><a class="dropdown-item border-radius-md" data-bs-toggle="modal" href="#addAnak">Tambah Anak</a></li>
                             </ul>
@@ -553,9 +570,9 @@
                     <div class="col-6 text-end">
                         {% if request|is_mobile %}
                         <div class="dropdown float-lg-end pe-2" {% if status == 'BATAL' or status == 'SELESAI' %}hidden{% else %}{% if not btn.edit and not request.user.is_superuser %}hidden{% endif %} {% if crud == 'update' %}hidden{% endif %}{% endif %} {% if archive %}hidden{% endif %}>
-                            <a class="cursor-pointer text-body" id="dropdownPaket" data-bs-toggle="dropdown" aria-expanded="false">
+                            <button type="button" class="btn btn-link text-body p-0 border-0 shadow-none" id="dropdownPaket" aria-expanded="false">
                                 <i class="fas fa-ellipsis-v"></i>
-                            </a>
+                            </button>
                             <ul class="dropdown-menu px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownPaket">
                                 <li><a class="dropdown-item border-radius-md" data-bs-toggle="modal" href="#addPaket">Tambah Paket</a></li>
                             </ul>
@@ -1576,6 +1593,49 @@
         });
     }
 
+    function closeMobileDropdowns() {
+        document.querySelectorAll('.order-view-mobile-dropdown .dropdown-menu.show').forEach(function(menu) {
+            menu.classList.remove('show');
+        });
+        document.querySelectorAll('.order-view-mobile-dropdown button[aria-expanded="true"]').forEach(function(button) {
+            button.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    function initMobileDropdown(triggerId) {
+        const trigger = document.getElementById(triggerId);
+        if (!trigger) {
+            return;
+        }
+
+        const dropdown = trigger.closest('.dropdown');
+        const menu = dropdown ? dropdown.querySelector('.dropdown-menu') : null;
+        if (!menu) {
+            return;
+        }
+
+        trigger.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const isOpen = menu.classList.contains('show');
+            closeMobileDropdowns();
+            if (!isOpen) {
+                menu.classList.add('show');
+                trigger.setAttribute('aria-expanded', 'true');
+            }
+        });
+    }
+
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.order-view-mobile-dropdown')) {
+            closeMobileDropdowns();
+        }
+    });
+
+    initMobileDropdown('dropdownTable');
+    initMobileDropdown('dropdownAnak');
+    initMobileDropdown('dropdownPaket');
+
     $(document).ready(function () {
         $('#childTable').DataTable({
             'searching': false,
@@ -1634,24 +1694,27 @@
         });
     });
 
-    c.forEach(function(checkbox, index) {
+    const addonCheckboxes = form ? form.querySelectorAll('.checks') : [];
+    const addonQtyInputs = form ? form.querySelectorAll('.qty') : [];
+
+    addonCheckboxes.forEach(function(checkbox, index) {
         checkbox.addEventListener('click', function() {
-            if (c[index].checked == true) {
-                if (q[index].value < 1) {
-                    q[index].value = 1;
+            if (addonCheckboxes[index].checked == true) {
+                if (addonQtyInputs[index].value < 1) {
+                    addonQtyInputs[index].value = 1;
                 }
             } else {
-                q[index].value = 0;
+                addonQtyInputs[index].value = 0;
             }
         });
     });
 
-    q.forEach(function(quantity, index) {
+    addonQtyInputs.forEach(function(quantity, index) {
         quantity.addEventListener('change', function() {
-            if (q[index].value > 0) {
-                c[index].checked = true;
+            if (addonQtyInputs[index].value > 0) {
+                addonCheckboxes[index].checked = true;
             } else {
-                c[index].checked = false;
+                addonCheckboxes[index].checked = false;
             }
         });
     });
@@ -1671,22 +1734,5 @@
         }
     });
     
-    let btn_menu = document.getElementById('dropdownTable');
-    let btn_anak = document.getElementById('dropdownAnak');
-    let btn_paket = document.getElementById('dropdownPaket');
-    let dropdown_menu = document.getElementsByClassName('dropdown-menu');
-    
-    // open dropdown menu
-    btn_menu.addEventListener('click', function() {
-        dropdown_menu[0].classList.toggle('show');
-    });
-
-    btn_anak.addEventListener('click', function() {
-        dropdown_menu[1].classList.toggle('show');
-    });
-
-    btn_paket.addEventListener('click', function() {
-        dropdown_menu[2].classList.toggle('show');
-    });
 </script>
 {% endblock javascripts %}

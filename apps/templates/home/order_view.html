@@ -736,7 +736,7 @@
                                 <div class="col-md-4 {% if not box %}d-none{% endif %}">
                                     <div class="shadow-none">
                                         <label class="form-control-label" for="id-box-type">Pilihan Kemasan</label>
-                                        <select class="form-control form-select-sm" name="box_type" id="id-box-type" required>
+                                        <select class="form-control form-select-sm" name="box_type" id="id-box-type" {% if box %}required{% endif %}>
                                             {% if box %}
                                             <option value="">Pilih Kemasan</option>
                                             {% endif %}
@@ -881,7 +881,7 @@
                                 <div class="col-md-12">
                                     <div class="shadow-none d-none">
                                         <label class="form-control-label" for="id-total-price">Total Harga</label>
-                                        <input type="number" name="total_price" id="id-total-price" class="form-control form-control-sm" required>
+                                        <input type="number" name="total_price" id="id-total-price" class="form-control form-control-sm">
                                     </div>
                                 </div>
                             </div>
@@ -929,8 +929,8 @@
                     </div>
                     <div class="modal-footer border-0">
                         <a href="{% url 'order-view' data.order_id '0' '0' '0' '0' %}" role="button" class="btn btn-sm bg-gradient-dark">Batal</a>
-                        <button type="button" id="btn-save-paket"
-                            class="btn btn-sm bg-gradient-warning text-white {% if not btn.edit and not request.user.is_superuser %}disabled{% endif %} {% if archive %}disabled{% endif %}">Simpan</button>
+                        <button type="submit" id="btn-save-paket"
+                            class="btn btn-sm bg-gradient-warning text-white">Simpan</button>
                     </div>
                 </form>
             </div>
@@ -944,7 +944,7 @@
                 <div class="modal-header">
                     <h5 class="modal-title" id="ModalLabel">Ubah Paket</h5>
                 </div>
-                <form id="editPackForm" method="post" action="{% url 'order-package-cs-update' data.order_id cat pack type %}" enctype="multipart/form-data">
+                <div id="editPackForm" data-action="{% url 'order-package-cs-update' data.order_id cat pack type %}">
                     {% csrf_token %}
                     <div class="modal-body border-bottom-0">
                         <div class="pl-lg-0">
@@ -1005,7 +1005,7 @@
                                 <div class="col-md-4 {% if not box %}d-none{% endif %}">
                                     <div class="shadow-none">
                                         <label class="form-control-label" for="id-box-type">Pilihan Kemasan</label>
-                                        <select class="form-control form-select-sm" name="box_type" id="id-box-type" required>
+                                        <select class="form-control form-select-sm" name="box_type" id="id-box-type" {% if box %}required{% endif %}>
                                             {% for item_box in box %}
                                             <option value="{{ item_box.equipment.equipment_name }}" {% if upd_package.box_type %}{% if item_box.equipment.equipment_name == upd_package.box_type %}selected{% endif %}{% else %}{% if item_box.default == 1 %}selected{% endif %}{% endif %}>{{ item_box.equipment.equipment_name }}{% if item_box.extra_price > 0 %} (+ Rp {{ item_box.extra_price|intcomma }}/box){% endif %}</option>
                                             {% endfor %}
@@ -1147,7 +1147,7 @@
                                 <div class="col-md-12">
                                     <div class="shadow-none d-none">
                                         <label class="form-control-label" for="id-total-price">Total Harga</label>
-                                        <input type="number" name="total_price" id="id-total-price" class="form-control form-control-sm" required>
+                                        <input type="number" name="total_price" id="id-total-price" class="form-control form-control-sm">
                                     </div>
                                 </div>
                             </div>
@@ -1197,7 +1197,7 @@
                         <button type="button" id="btn-edit-paket"
                             class="btn btn-sm bg-gradient-warning text-white {% if not btn.edit and not request.user.is_superuser %}disabled{% endif %} {% if status == 'BATAL' or status == 'SELESAI' %}disabled{% else %}{% if crud == 'update' %}disabled{% endif %}{% endif %} {% if archive %}disabled{% endif %}">Simpan</button>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
@@ -1430,9 +1430,9 @@
     let save = document.getElementById('save-addon');
     let crudStatus = '{{ crud_det }}';
     const modal_add = document.getElementById('addPaket');
-    const modalAdd = new bootstrap.Modal(modal_add);
     const modal_edit = document.getElementById('updPack-{{ crud_det }}');
-    const modalEdit = new bootstrap.Modal(modal_edit);
+    const modalAdd = modal_add ? new bootstrap.Modal(modal_add) : null;
+    const modalEdit = modal_edit ? new bootstrap.Modal(modal_edit) : null;
     let btnSaveOrder = document.getElementById('save-btn');
     let btnSavePaket = document.getElementById('btn-save-paket');
     let btnEditPaket = document.getElementById('btn-edit-paket');
@@ -1455,10 +1455,10 @@
         }
     });
 
-    if (crudStatus == 'add') {
+    if (crudStatus == 'add' && modalAdd) {
         modalAdd.show();
         modalAdd._config.keyboard = false;
-    } else if (crudStatus != '0') {
+    } else if (crudStatus != '0' && modalEdit) {
         modalEdit.show();
         modalEdit._config.keyboard = false;
     }
@@ -1541,33 +1541,44 @@
         tempForm.submit();
     }
 
-    if (packForm) {
-        packForm.addEventListener('submit', function () {
-            setPackageTotal(packForm);
-        });
+    function validateRequiredFields(container) {
+        const requiredFields = container.querySelectorAll('input[required], select[required], textarea[required]');
+        for (const field of requiredFields) {
+            if (field.disabled) {
+                continue;
+            }
+
+            if (!field.value) {
+                field.reportValidity();
+                field.focus();
+                return false;
+            }
+        }
+        return true;
     }
 
-    if (editPackForm) {
-        editPackForm.addEventListener('submit', function () {
-            setPackageTotal(editPackForm);
-        });
-    }
+    function submitPackageForm(formId, actionUrl) {
+        const sourceForm = document.getElementById(formId);
+        if (!sourceForm) {
+            return;
+        }
 
-    if (btnSavePaket && packForm) {
-        btnSavePaket.addEventListener('click', function () {
-            setPackageTotal(packForm);
-            packForm.requestSubmit ? packForm.requestSubmit() : packForm.submit();
-        });
+        setPackageTotal(sourceForm);
+        if (!sourceForm.checkValidity()) {
+            sourceForm.reportValidity();
+            return;
+        }
+
+        submitDetachedForm(sourceForm, actionUrl || sourceForm.action);
     }
 
     if (btnEditPaket && editPackForm) {
         btnEditPaket.addEventListener('click', function () {
             setPackageTotal(editPackForm);
-            if (!editPackForm.checkValidity()) {
-                editPackForm.reportValidity();
+            if (!validateRequiredFields(editPackForm)) {
                 return;
             }
-            submitDetachedForm(editPackForm, "{% url 'order-package-cs-update' data.order_id cat pack type %}");
+            submitDetachedForm(editPackForm, editPackForm.dataset.action);
         });
     }
 
@@ -1637,61 +1648,75 @@
     initMobileDropdown('dropdownPaket');
 
     $(document).ready(function () {
-        $('#childTable').DataTable({
+        if ($('#childTable').length) {
+            $('#childTable').DataTable({
             'searching': false,
             'lengthChange': false,
             'paging': false,
             'info': false,
             'cell-border': true,
             'order': [[1, 'asc']],
-        });
-        $('#packTable').DataTable({
+            });
+        }
+        if ($('#packTable').length) {
+            $('#packTable').DataTable({
             'searching': false,
             'lengthChange': false,
             'paging': false,
             'info': false,
             'cell-border': true,
-        });
-        $('#leftoverTable1').DataTable({
-            'searching': false,
-            'lengthChange': false,
-            'paging': false,
-            'info': false,
-            'cell-border': true,
-            'order': [[0, 'asc']],
-        });
-        $('#leftoverTable2').DataTable({
-            'searching': false,
-            'lengthChange': false,
-            'paging': false,
-            'info': false,
-            'cell-border': true,
-            'order': [[0, 'asc']],
-        });
-        $('#leftoverTable3').DataTable({
+            });
+        }
+        if ($('#leftoverTable1').length) {
+            $('#leftoverTable1').DataTable({
             'searching': false,
             'lengthChange': false,
             'paging': false,
             'info': false,
             'cell-border': true,
             'order': [[0, 'asc']],
-        });
-        $('#leftoverTable4').DataTable({
+            });
+        }
+        if ($('#leftoverTable2').length) {
+            $('#leftoverTable2').DataTable({
             'searching': false,
             'lengthChange': false,
             'paging': false,
             'info': false,
             'cell-border': true,
             'order': [[0, 'asc']],
-        });
-        $('#leftoverTable5').DataTable({
+            });
+        }
+        if ($('#leftoverTable3').length) {
+            $('#leftoverTable3').DataTable({
             'searching': false,
             'lengthChange': false,
             'paging': false,
             'info': false,
             'cell-border': true,
             'order': [[0, 'asc']],
-        });
+            });
+        }
+        if ($('#leftoverTable4').length) {
+            $('#leftoverTable4').DataTable({
+            'searching': false,
+            'lengthChange': false,
+            'paging': false,
+            'info': false,
+            'cell-border': true,
+            'order': [[0, 'asc']],
+            });
+        }
+        if ($('#leftoverTable5').length) {
+            $('#leftoverTable5').DataTable({
+            'searching': false,
+            'lengthChange': false,
+            'paging': false,
+            'info': false,
+            'cell-border': true,
+            'order': [[0, 'asc']],
+            });
+        }
     });
 
     const addonCheckboxes = form ? form.querySelectorAll('.checks') : [];
@@ -1724,12 +1749,16 @@
         
         for (const item of modal) {
             item.addEventListener('show.bs.modal', function() {
-                // remove z-index-0 from nearest parent card class
-                item.closest('.card').classList.remove('z-index-0');
+                const parentCard = item.closest('.card');
+                if (parentCard) {
+                    parentCard.classList.remove('z-index-0');
+                }
             });
             item.addEventListener('hidden.bs.modal', function() {
-                // add z-index-0 from nearest card class
-                item.closest('.card').classList.add('z-index-0');
+                const parentCard = item.closest('.card');
+                if (parentCard) {
+                    parentCard.classList.add('z-index-0');
+                }
             });
         }
     });

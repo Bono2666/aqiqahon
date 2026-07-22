@@ -1,10 +1,6 @@
-#!/bin/sh
-'''exec' "/Users/bono2666/Library/CloudStorage/OneDrive-Personal/Being Worked On/Sahabat Aqiqah/aqiqahon/venv/bin/python3.11" "$0" "$@"
-' '''
-# -*- coding: utf-8 -*-
-import re
+#!/Users/bono2666/Downloads/aqiqahon/venv/bin/python3.11
 import sys
 from xhtml2pdf.pisa import command
 if __name__ == '__main__':
-    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
     sys.exit(command())

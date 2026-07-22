@@ -1,8 +1,10 @@
+import datetime as dt
 from datetime import date, timedelta
+import json
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.db import connection, IntegrityError
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse, FileResponse
 from django.shortcuts import render
 from django.urls import reverse
 from django.forms.models import modelformset_factory
@@ -15,17 +17,9 @@ from django.utils import timezone
 import xlwt
 from django.http import HttpResponse
 import xlsxwriter
-from django.db.models import Sum
-from django.db.models import Max
-from django.db.models import Min
-from django.db.models import Q
+from django.db.models import F, Sum, Q, Count, Max, Min
+from django.db.models.functions import Coalesce
 from . import host
-from reportlab.pdfgen import canvas
-from django.http import FileResponse
-from reportlab.platypus import Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import landscape, A4
-from django.db.models import Count
 from django.core.paginator import Paginator
 from PyPDF2 import PdfMerger
 from django.conf import settings
@@ -34,24 +28,342 @@ from django.template.loader import get_template
 from django.utils.text import Truncator
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.utils import simpleSplit
+from reportlab.pdfgen import canvas
 from crum import get_current_user
 from apps.notifications import order_notification
 import re
 from xml.sax.saxutils import escape
 from django.contrib.staticfiles import finders
 
+BULAN_ID = {
+    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'Mei', 6: 'Jun',
+    7: 'Jul', 8: 'Agu', 9: 'Sep', 10: 'Okt', 11: 'Nov', 12: 'Des'
+}
+
+
+def format_tanggal_id(tgl):
+    return f"{tgl.day} {BULAN_ID[tgl.month]} {tgl.year}"
+
 
 @login_required(login_url='/login/')
 def home(request):
+    return HttpResponseRedirect(reverse('dashboard'))
+
+
+@login_required(login_url='/login/')
+def dashboard(request):
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    user_id = request.user.user_id
+
+    filter_branch_list = request.GET.getlist('branch', [])
+    filter_branch_list = [b for b in filter_branch_list if b and b != 'all']
+    filter_date = request.GET.get('date', '')
+
+    if filter_date:
+        try:
+            filter_date_obj = dt.datetime.strptime(filter_date, '%Y-%m-%d').date()
+        except ValueError:
+            filter_date_obj = today
+    else:
+        filter_date_obj = today
+
+    filter_date_tomorrow = filter_date_obj + timedelta(days=1)
+
+    areas = AreaUser.objects.filter(user_id=user_id).values_list('area_id', flat=True)
+    branches = AreaSales.objects.filter(area_id__in=areas).order_by('area_name')
+
+    today_orders = Order.objects.filter(
+        delivery_date__date=filter_date_obj,
+        regional_id__in=areas
+    ).exclude(order_status__in=['PENDING', 'DRAFT', 'BATAL'])
+    if filter_branch_list:
+        today_orders = today_orders.filter(regional_id__in=filter_branch_list)
+
+    total_today = today_orders.count()
+    unscheduled = today_orders.filter(schedule_status='UNSCHEDULED').count()
+    cooking = today_orders.filter(schedule_status__in=['SCHEDULED', 'COOKING']).count()
+    packing = today_orders.filter(schedule_status='PACKING').count()
+    ready = today_orders.filter(schedule_status='READY').count()
+    on_delivery = today_orders.filter(schedule_status='ON_DELIVERY').count()
+    completed = today_orders.filter(schedule_status='COMPLETED').count()
+
+    order_packages = OrderPackage.objects.filter(
+        order__delivery_date__date=filter_date_obj,
+        order__regional_id__in=areas
+    ).exclude(order__order_status__in=['PENDING', 'DRAFT', 'BATAL'])
+    if filter_branch_list:
+        order_packages = order_packages.filter(order__regional_id__in=filter_branch_list)
+
+    total_kambing = order_packages.annotate(
+        calculated_kambing=F('package__quantity') * F('quantity')
+    ).aggregate(total=Sum('calculated_kambing'))['total'] or 0
+    total_box = order_packages.annotate(
+        calculated_box=F('package__box') * F('quantity')
+    ).aggregate(total=Sum('calculated_box'))['total'] or 0
+
+    order_addons = OrderPackageAddon.objects.filter(
+        order__delivery_date__date=filter_date_obj,
+        order__regional_id__in=areas
+    ).exclude(order__order_status__in=['PENDING', 'DRAFT', 'BATAL'])
+    if filter_branch_list:
+        order_addons = order_addons.filter(order__regional_id__in=filter_branch_list)
+
+    addon_kemasan = order_addons.filter(
+        equipment__tipe='Kemasan Dan Souvenir'
+    ).values('equipment__equipment_name').annotate(
+        total=Sum('quantity')
+    ).filter(total__gt=0)
+
+    addon_masakan = order_addons.filter(
+        equipment__tipe='Masakan'
+    ).values('equipment__equipment_name').annotate(
+        total=Sum('quantity')
+    ).filter(total__gt=0)
+
+    addon_olahan = order_addons.filter(
+        equipment__tipe='Olahan Dan Pendamping'
+    ).values('equipment__equipment_name').annotate(
+        total=Sum('quantity')
+    ).filter(total__gt=0)
+
+    addon_box_paket_qty = order_addons.filter(
+        equipment__tipe='Box Paket'
+    ).aggregate(total=Sum('quantity'))['total'] or 0
+
+    total_box_paket = total_box + addon_box_paket_qty
+
+    dashboard_recap = order_packages.filter(
+        package__dashboard__isnull=False
+    ).values(
+        'package__dashboard__dashboard_name'
+    ).annotate(
+        total=Sum('quantity')
+    ).filter(total__gt=0).order_by('package__dashboard__display_order')
+
+    recap_box_items = []
+    box_type_values = order_packages.exclude(box_type__isnull=True).exclude(box_type='').values('box_type').annotate(
+        total=Sum(F('package__box') * F('quantity'))
+    ).order_by('box_type')
+    for item in box_type_values:
+        if (item['total'] or 0) > 0:
+            recap_box_items.append({
+                'name': item['box_type'],
+                'count': item['total'] or 0,
+            })
+    bag_values = order_packages.exclude(bag__isnull=True).exclude(bag='').values('bag').annotate(
+        total=Sum(F('package__box') * F('quantity'))
+    ).order_by('bag')
+    for item in bag_values:
+        if (item['total'] or 0) > 0:
+            recap_box_items.append({
+                'name': item['bag'],
+                'count': item['total'] or 0,
+            })
+    souvenir_values = order_packages.exclude(souvenir__isnull=True).exclude(souvenir='').values('souvenir').annotate(
+        total=Sum('quantity')
+    ).order_by('souvenir')
+    for item in souvenir_values:
+        if (item['total'] or 0) > 0:
+            recap_box_items.append({
+                'name': item['souvenir'],
+                'count': item['total'] or 0,
+            })
+
+    recap_masakan = order_packages.exclude(main_cuisine__isnull=True).exclude(main_cuisine='').values(
+        'main_cuisine'
+    ).annotate(total=Sum(F('package__box') * F('quantity'))).filter(total__gt=0).order_by('main_cuisine')
+
+    menu_olahan_counter = {}
+    for op in order_packages:
+        for field_name in ['sub_cuisine', 'side_cuisine1', 'side_cuisine2', 'side_cuisine3', 'side_cuisine4', 'side_cuisine5']:
+            val = getattr(op, field_name, None)
+            if val:
+                menu_olahan_counter[val] = menu_olahan_counter.get(val, 0) + (op.package.box * op.quantity)
+        if op.rice:
+            menu_olahan_counter[op.rice] = menu_olahan_counter.get(op.rice, 0) + (op.package.box * op.quantity)
+    recap_menu_olahan = [{'name': k, 'count': v} for k, v in sorted(menu_olahan_counter.items()) if v > 0]
+
+    dekorasi_per_order = order_packages.filter(
+        package__dashboard__dashboard_name='Dekorasi'
+    ).values('order_id').annotate(
+        order_qty=Sum('quantity')
+    ).filter(order_qty__gt=0)
+
+    recap_dekorasi_laki = 0
+    recap_dekorasi_perempuan = 0
+    dekorasi_order_ids = [item['order_id'] for item in dekorasi_per_order]
+    if dekorasi_order_ids:
+        dekorasi_qty_map = {item['order_id']: item['order_qty'] for item in dekorasi_per_order}
+        child_sex_map = {}
+        for child in OrderChild.objects.filter(order_id__in=dekorasi_order_ids).order_by('id').values('order_id', 'child_sex'):
+            child_sex_map.setdefault(child['order_id'], child['child_sex'])
+        for order_id, qty in dekorasi_qty_map.items():
+            sex = child_sex_map.get(order_id)
+            if sex == '1':
+                recap_dekorasi_laki += qty
+            elif sex == '2':
+                recap_dekorasi_perempuan += qty
+
+    recap_nasi_box = list(order_packages.filter(
+        package__dashboard__dashboard_name__icontains='nasi box'
+    ).values(
+        'package__package_name'
+    ).annotate(
+        total=Sum('quantity')
+    ).filter(total__gt=0))
+    total_nasi_box = sum(item['total'] for item in recap_nasi_box)
+
+    kambing_packages = order_packages.filter(
+        package__dashboard__dashboard_name__icontains='paket kambing'
+    )
+    daging_counter = {}
+    olahan_counter = {}
+    for op in kambing_packages:
+        if op.main_cuisine:
+            mc = MainCuisine.objects.filter(
+                package=op.package, cuisine__cuisine_name=op.main_cuisine
+            ).first()
+            if mc:
+                daging_counter[op.main_cuisine] = daging_counter.get(op.main_cuisine, 0) + (mc.porsi * op.quantity)
+        for field_name in ['sub_cuisine', 'side_cuisine1', 'side_cuisine2', 'side_cuisine3', 'side_cuisine4', 'side_cuisine5']:
+            val = getattr(op, field_name, None)
+            if val:
+                sc = SubCuisine.objects.filter(
+                    package=op.package, cuisine__cuisine_name=val
+                ).first()
+                porsi = sc.porsi if sc else 0
+                olahan_counter[val] = olahan_counter.get(val, 0) + (porsi * op.quantity)
+    recap_paket_kambing_daging = [{'name': k, 'count': v} for k, v in sorted(daging_counter.items()) if v > 0]
+    recap_paket_kambing_olahan = [{'name': k, 'count': v} for k, v in sorted(olahan_counter.items()) if v > 0]
+
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order')
+    goat_type_recap_jantan = []
+    goat_type_recap_betina = []
+    total_type_kambing_jantan = 0
+    total_type_kambing_betina = 0
+    for gt in goat_types:
+        count_jantan = order_packages.filter(
+            package__goat_type=gt, type='Jantan'
+        ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        count_betina = order_packages.filter(
+            package__goat_type=gt, type='Betina'
+        ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        total_type_kambing_jantan += count_jantan
+        total_type_kambing_betina += count_betina
+        if count_jantan > 0:
+            goat_type_recap_jantan.append({
+                'name': gt.goat_type_name,
+                'count': count_jantan,
+            })
+        if count_betina > 0:
+            goat_type_recap_betina.append({
+                'name': gt.goat_type_name,
+                'count': count_betina,
+            })
+
+    recap_kambing_guling = []
+    total_kambing_guling = 0
+    kambing_guling_packages = order_packages.filter(
+        package__dashboard__dashboard_name__icontains='kambing guling'
+    )
+    for gt in goat_types:
+        for tipe in ['Jantan', 'Betina']:
+            count = kambing_guling_packages.filter(
+                package__goat_type=gt, type=tipe
+            ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+            if count > 0:
+                recap_kambing_guling.append({
+                    'name': gt.goat_type_name,
+                    'tipe': tipe,
+                    'count': count,
+                })
+            total_kambing_guling += count
+
+    recap_nampan = list(order_packages.filter(
+        package__dashboard__dashboard_name__icontains='nampan'
+    ).values(
+        'package__package_name'
+    ).annotate(
+        total=Sum('quantity')
+    ).filter(total__gt=0))
+    total_nampan = sum(item['total'] for item in recap_nampan)
+
+    recap_qurban = list(order_packages.filter(
+        package__dashboard__dashboard_name__icontains='qurban'
+    ).values(
+        'package__package_name'
+    ).annotate(
+        total=Sum('quantity')
+    ).filter(total__gt=0))
+    total_qurban = sum(item['total'] for item in recap_qurban)
+
+    driver_name = request.user.username
+    today_driver = today_orders.exclude(schedule_status='COMPLETED')
+    tomorrow_orders = Order.objects.filter(
+        delivery_date__date=filter_date_tomorrow,
+        regional_id__in=areas
+    ).exclude(order_status__in=['PENDING', 'DRAFT', 'BATAL'])
+    if filter_branch_list:
+        tomorrow_orders = tomorrow_orders.filter(regional_id__in=filter_branch_list)
+    history_driver = today_orders.filter(
+        schedule_status='COMPLETED'
+    )
+
     context = {
         'notif': order_notification(request),
-        'segment': 'index',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'segment': 'dashboard',
+        'group_segment': 'dashboard',
+        'role': Auth.objects.filter(user_id=user_id).values_list('menu_id', flat=True),
+        'total_today': total_today,
+        'unscheduled': unscheduled,
+        'cooking': cooking,
+        'packing': packing,
+        'ready': ready,
+        'on_delivery': on_delivery,
+        'completed': completed,
+        'total_kambing': total_kambing,
+        'total_box': total_box,
+        'total_box_paket': total_box_paket,
+        'addon_kemasan': addon_kemasan,
+        'addon_masakan': addon_masakan,
+        'addon_olahan': addon_olahan,
+        'dashboard_recap': dashboard_recap,
+        'recap_box_items': recap_box_items,
+        'recap_masakan': recap_masakan,
+        'recap_menu_olahan': recap_menu_olahan,
+        'recap_dekorasi_laki': recap_dekorasi_laki,
+        'recap_dekorasi_perempuan': recap_dekorasi_perempuan,
+        'recap_nasi_box': recap_nasi_box,
+        'total_nasi_box': total_nasi_box,
+        'recap_paket_kambing_daging': recap_paket_kambing_daging,
+        'recap_paket_kambing_olahan': recap_paket_kambing_olahan,
+        'recap_kambing_guling': recap_kambing_guling,
+        'total_kambing_guling': total_kambing_guling,
+        'recap_nampan': recap_nampan,
+        'total_nampan': total_nampan,
+        'recap_qurban': recap_qurban,
+        'total_qurban': total_qurban,
+
+        'goat_type_recap_jantan': goat_type_recap_jantan,
+        'goat_type_recap_betina': goat_type_recap_betina,
+        'total_type_kambing_jantan': total_type_kambing_jantan,
+        'total_type_kambing_betina': total_type_kambing_betina,
+        'today_driver': today_driver,
+        'tomorrow_orders': tomorrow_orders,
+        'history_driver': history_driver,
+        'branches': branches,
+        'filter_branch_list': filter_branch_list,
+        'filter_date': filter_date if filter_date else today.isoformat(),
+        'filter_date_label': format_tanggal_id(filter_date_obj) if filter_date_obj != today else '',
+        'filter_date_tomorrow_label': format_tanggal_id(filter_date_tomorrow) if filter_date_obj != today else '',
+        'is_filter_active': filter_date_obj != today or bool(filter_branch_list),
     }
-    return render(request, 'home/index.html', context)
+    return render(request, 'home/dashboard.html', context)
 
 
 @login_required(login_url='/login/')
@@ -371,121 +683,6 @@ def set_password(request, _id):
         'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='USER') if not request.user.is_superuser else Auth.objects.all(),
     }
     return render(request, 'home/user_set_password.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DISTRIBUTOR')
-def distributor_index(request):
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT distributor_id, distributor_name, sap_code FROM apps_distributor")
-        distributors = cursor.fetchall()
-
-    context = {
-        'data': distributors,
-        'notif': order_notification(request),
-        'segment': 'distributor',
-        'group_segment': 'master',
-        'crud': 'index',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DISTRIBUTOR') if not request.user.is_superuser else Auth.objects.all(),
-    }
-
-    return render(request, 'home/distributor_index.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DISTRIBUTOR')
-def distributor_add(request):
-    if request.POST:
-        form = FormDistributor(request.POST, request.FILES)
-        if form.is_valid():
-            form.save()
-            return HttpResponseRedirect(reverse('distributor-index'))
-        else:
-            message = form.errors
-            context = {
-                'form': form,
-                'notif': order_notification(request),
-                'segment': 'distributor',
-                'group_segment': 'master',
-                'crud': 'add',
-                'message': message,
-                'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-                'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DISTRIBUTOR') if not request.user.is_superuser else Auth.objects.all(),
-            }
-            return render(request, 'home/distributor_add.html', context)
-    else:
-        form = FormDistributor()
-        context = {
-            'form': form,
-            'notif': order_notification(request),
-            'segment': 'distributor',
-            'group_segment': 'master',
-            'crud': 'add',
-            'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-            'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DISTRIBUTOR') if not request.user.is_superuser else Auth.objects.all(),
-        }
-        return render(request, 'home/distributor_add.html', context)
-
-
-# View Distributor
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DISTRIBUTOR')
-def distributor_view(request, _id):
-    distributors = Distributor.objects.get(distributor_id=_id)
-    form = FormDistributorView(instance=distributors)
-
-    context = {
-        'form': form,
-        'data': distributors,
-        'notif': order_notification(request),
-        'segment': 'distributor',
-        'group_segment': 'master',
-        'crud': 'view',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DISTRIBUTOR') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/distributor_view.html', context)
-
-
-# Update Distributor
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DISTRIBUTOR')
-def distributor_update(request, _id):
-    distributors = Distributor.objects.get(distributor_id=_id)
-    if request.POST:
-        form = FormDistributorUpdate(
-            request.POST, request.FILES, instance=distributors)
-        if form.is_valid():
-            form.save()
-            return HttpResponseRedirect(reverse('distributor-view', args=[_id, ]))
-    else:
-        form = FormDistributorUpdate(instance=distributors)
-
-    message = form.errors
-    context = {
-        'form': form,
-        'data': distributors,
-        'notif': order_notification(request),
-        'segment': 'distributor',
-        'group_segment': 'master',
-        'crud': 'update',
-        'message': message,
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DISTRIBUTOR') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/distributor_view.html', context)
-
-
-# Delete Distributor
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DISTRIBUTOR')
-def distributor_delete(request, _id):
-    distributors = Distributor.objects.get(distributor_id=_id)
-
-    distributors.delete()
-    return HttpResponseRedirect(reverse('distributor-index'))
 
 
 @login_required(login_url='/login/')
@@ -1436,6 +1633,232 @@ def category_delete(request, _id):
 
 
 @login_required(login_url='/login/')
+@role_required(allowed_roles='GOATTYPE')
+def goat_type_index(request):
+    goat_types = GoatType.objects.all()
+
+    context = {
+        'data': goat_types,
+        'notif': order_notification(request),
+        'segment': 'goat_type',
+        'group_segment': 'master',
+        'crud': 'index',
+        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='GOATTYPE') if not request.user.is_superuser else Auth.objects.all(),
+    }
+
+    return render(request, 'home/goat_type_index.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='GOATTYPE')
+def goat_type_add(request):
+    if request.POST:
+        form = FormGoatType(request.POST, request.FILES)
+        if form.is_valid():
+            add = form.save(commit=False)
+            add.active = True if request.POST.get('active') else False
+            add.save()
+            return HttpResponseRedirect(reverse('goat-type-index'))
+        else:
+            message = form.errors
+            context = {
+                'form': form,
+                'notif': order_notification(request),
+                'segment': 'goat_type',
+                'group_segment': 'master',
+                'crud': 'add',
+                'message': message,
+                'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+                'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='GOATTYPE') if not request.user.is_superuser else Auth.objects.all(),
+            }
+            return render(request, 'home/goat_type_add.html', context)
+    else:
+        form = FormGoatType()
+        context = {
+            'form': form,
+            'notif': order_notification(request),
+            'segment': 'goat_type',
+            'group_segment': 'master',
+            'crud': 'add',
+            'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+            'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='GOATTYPE') if not request.user.is_superuser else Auth.objects.all(),
+        }
+        return render(request, 'home/goat_type_add.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='GOATTYPE')
+def goat_type_view(request, _id):
+    goat_types = GoatType.objects.get(goat_type_id=_id)
+    form = FormGoatTypeView(instance=goat_types)
+
+    context = {
+        'form': form,
+        'data': goat_types,
+        'notif': order_notification(request),
+        'segment': 'goat_type',
+        'group_segment': 'master',
+        'crud': 'view',
+        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='GOATTYPE') if not request.user.is_superuser else Auth.objects.all(),
+    }
+    return render(request, 'home/goat_type_view.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='GOATTYPE')
+def goat_type_update(request, _id):
+    goat_types = GoatType.objects.get(goat_type_id=_id)
+    if request.POST:
+        form = FormGoatTypeUpdate(
+            request.POST, request.FILES, instance=goat_types)
+        if form.is_valid():
+            update = form.save(commit=False)
+            update.active = True if request.POST.get('active') else False
+            update.save()
+            return HttpResponseRedirect(reverse('goat-type-view', args=[_id, ]))
+    else:
+        form = FormGoatTypeUpdate(instance=goat_types)
+
+    message = form.errors
+    context = {
+        'form': form,
+        'data': goat_types,
+        'notif': order_notification(request),
+        'segment': 'goat_type',
+        'group_segment': 'master',
+        'crud': 'update',
+        'message': message,
+        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='GOATTYPE') if not request.user.is_superuser else Auth.objects.all(),
+    }
+    return render(request, 'home/goat_type_view.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='GOATTYPE')
+def goat_type_delete(request, _id):
+    goat_types = GoatType.objects.get(goat_type_id=_id)
+
+    goat_types.delete()
+    return HttpResponseRedirect(reverse('goat-type-index'))
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='DASHBOARD')
+def dashboard_card_index(request):
+    dashboards = Dashboard.objects.all()
+
+    context = {
+        'data': dashboards,
+        'notif': order_notification(request),
+        'segment': 'dashboard_card',
+        'group_segment': 'master',
+        'crud': 'index',
+        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DASHBOARD') if not request.user.is_superuser else Auth.objects.all(),
+    }
+
+    return render(request, 'home/dashboard_card_index.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='DASHBOARD')
+def dashboard_card_add(request):
+    if request.POST:
+        form = FormDashboard(request.POST, request.FILES)
+        if form.is_valid():
+            add = form.save(commit=False)
+            add.active = True if request.POST.get('active') else False
+            add.save()
+            return HttpResponseRedirect(reverse('dashboard-card-index'))
+        else:
+            message = form.errors
+            context = {
+                'form': form,
+                'notif': order_notification(request),
+                'segment': 'dashboard_card',
+                'group_segment': 'master',
+                'crud': 'add',
+                'message': message,
+                'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+                'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DASHBOARD') if not request.user.is_superuser else Auth.objects.all(),
+            }
+            return render(request, 'home/dashboard_card_add.html', context)
+    else:
+        form = FormDashboard()
+        context = {
+            'form': form,
+            'notif': order_notification(request),
+            'segment': 'dashboard_card',
+            'group_segment': 'master',
+            'crud': 'add',
+            'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+            'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DASHBOARD') if not request.user.is_superuser else Auth.objects.all(),
+        }
+        return render(request, 'home/dashboard_card_add.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='DASHBOARD')
+def dashboard_card_view(request, _id):
+    dashboards = Dashboard.objects.get(dashboard_id=_id)
+    form = FormDashboardView(instance=dashboards)
+
+    context = {
+        'form': form,
+        'data': dashboards,
+        'notif': order_notification(request),
+        'segment': 'dashboard_card',
+        'group_segment': 'master',
+        'crud': 'view',
+        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DASHBOARD') if not request.user.is_superuser else Auth.objects.all(),
+    }
+    return render(request, 'home/dashboard_card_view.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='DASHBOARD')
+def dashboard_card_update(request, _id):
+    dashboards = Dashboard.objects.get(dashboard_id=_id)
+    if request.POST:
+        form = FormDashboardUpdate(
+            request.POST, request.FILES, instance=dashboards)
+        if form.is_valid():
+            update = form.save(commit=False)
+            update.active = True if request.POST.get('active') else False
+            update.save()
+            return HttpResponseRedirect(reverse('dashboard-card-view', args=[_id, ]))
+    else:
+        form = FormDashboardUpdate(instance=dashboards)
+
+    message = form.errors
+    context = {
+        'form': form,
+        'data': dashboards,
+        'notif': order_notification(request),
+        'segment': 'dashboard_card',
+        'group_segment': 'master',
+        'crud': 'update',
+        'message': message,
+        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='DASHBOARD') if not request.user.is_superuser else Auth.objects.all(),
+    }
+    return render(request, 'home/dashboard_card_view.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='DASHBOARD')
+def dashboard_card_delete(request, _id):
+    dashboards = Dashboard.objects.get(dashboard_id=_id)
+
+    dashboards.delete()
+    return HttpResponseRedirect(reverse('dashboard-card-index'))
+
+
+@login_required(login_url='/login/')
 @role_required(allowed_roles='PACKAGE')
 def package_index(request):
     packages = Package.objects.all()
@@ -1457,6 +1880,8 @@ def package_index(request):
 @role_required(allowed_roles='PACKAGE')
 def package_add(request):
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     if request.POST:
         form = FormPackage(request.POST, request.FILES)
         if form.is_valid():
@@ -1465,6 +1890,12 @@ def package_add(request):
             new.type = request.POST.get('type')
             new.active = True if request.POST.get('active') else False
             new.promo = True if request.POST.get('promo') else False
+            goat_type_id = request.POST.get('goat_type')
+            if goat_type_id:
+                new.goat_type_id = goat_type_id
+            dashboard_id = request.POST.get('dashboard')
+            if dashboard_id:
+                new.dashboard_id = dashboard_id
             new.save()
             return HttpResponseRedirect(reverse('package-view', args=[new.package_id, ]))
         else:
@@ -1472,6 +1903,8 @@ def package_add(request):
             context = {
                 'form': form,
                 'categories': categories,
+                'goat_types': goat_types,
+                'dashboards': dashboards,
                 'notif': order_notification(request),
                 'segment': 'package',
                 'group_segment': 'master',
@@ -1487,6 +1920,8 @@ def package_add(request):
         context = {
             'form': form,
             'categories': categories,
+            'goat_types': goat_types,
+            'dashboards': dashboards,
             'notif': order_notification(request),
             'segment': 'package',
             'group_segment': 'master',
@@ -1506,6 +1941,8 @@ def package_rice_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -1569,6 +2006,8 @@ def package_rice_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -1600,7 +2039,7 @@ def package_rice_view(request, _id):
         'notif': order_notification(request),
         'segment': 'package',
         'group_segment': 'master',
-        'tab': 'rice',
+        'tab': 'main_cuisine',
         'eq_tab': 'beverage',
         'crud': 'view',
         'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
@@ -1617,6 +2056,8 @@ def package_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -1680,6 +2121,8 @@ def package_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -1728,6 +2171,8 @@ def package_subcuisine_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -1791,6 +2236,8 @@ def package_subcuisine_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -1839,6 +2286,8 @@ def package_sidecuisine1_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -1902,6 +2351,8 @@ def package_sidecuisine1_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -1950,6 +2401,8 @@ def package_sidecuisine2_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2013,6 +2466,8 @@ def package_sidecuisine2_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2061,6 +2516,8 @@ def package_sidecuisine3_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2124,6 +2581,8 @@ def package_sidecuisine3_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2172,6 +2631,8 @@ def package_sidecuisine4_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2235,6 +2696,8 @@ def package_sidecuisine4_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2283,6 +2746,8 @@ def package_sidecuisine5_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2346,6 +2811,8 @@ def package_sidecuisine5_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2394,6 +2861,8 @@ def package_beverage_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2457,6 +2926,8 @@ def package_beverage_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2505,6 +2976,8 @@ def package_bag_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2568,6 +3041,8 @@ def package_bag_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2616,6 +3091,8 @@ def package_box_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2679,6 +3156,8 @@ def package_box_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2727,6 +3206,8 @@ def package_souvenir_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2790,6 +3271,8 @@ def package_souvenir_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2838,6 +3321,8 @@ def package_other_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -2901,6 +3386,8 @@ def package_other_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -2949,6 +3436,8 @@ def package_addon_view(request, _id):
     packages.female_price = '{:,}'.format(packages.female_price)
     form = FormPackageView(instance=packages)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -3012,6 +3501,8 @@ def package_addon_view(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -3059,6 +3550,7 @@ def package_maincuisine_update(request, _id, _cuisine):
 
     if request.POST:
         cuisine.extra_price = request.POST.get('price')
+        cuisine.porsi = request.POST.get('porsi', 0)
         cuisine.default = 1 if request.POST.get('default') else 0
         cuisine.save()
 
@@ -3074,6 +3566,7 @@ def package_subcuisine_update(request, _id, _cuisine):
 
     if request.POST:
         cuisine.extra_price = request.POST.get('price')
+        cuisine.porsi = request.POST.get('porsi', 0)
         cuisine.default = 1 if request.POST.get('default') else 0
         cuisine.save()
 
@@ -3371,6 +3864,8 @@ def package_addon_delete(request, _id, _eq):
 def package_update(request, _id):
     packages = Package.objects.get(package_id=_id)
     categories = Category.objects.all()
+    goat_types = GoatType.objects.filter(active=True).order_by('display_order', 'goat_type_id')
+    dashboards = Dashboard.objects.filter(active=True).order_by('display_order', 'dashboard_id')
     selected_rice = Rice.objects.filter(package_id=_id)
     selected_cuisine = MainCuisine.objects.filter(package_id=_id)
     selected_subcuisine = SubCuisine.objects.filter(package_id=_id)
@@ -3422,6 +3917,16 @@ def package_update(request, _id):
             update.active = 1 if request.POST.get('active') else 0
             update.promo = 1 if request.POST.get('promo') else 0
             update.type = request.POST.get('type')
+            goat_type_id = request.POST.get('goat_type')
+            if goat_type_id:
+                update.goat_type_id = goat_type_id
+            else:
+                update.goat_type = None
+            dashboard_id = request.POST.get('dashboard')
+            if dashboard_id:
+                update.dashboard_id = dashboard_id
+            else:
+                update.dashboard = None
             update.male_price = request.POST.get('male_price')
             update.female_price = request.POST.get('female_price')
             update.save()
@@ -3434,6 +3939,8 @@ def package_update(request, _id):
         'form': form,
         'data': packages,
         'categories': categories,
+        'goat_types': goat_types,
+        'dashboards': dashboards,
         'selected_rice': selected_rice,
         'selected_cuisine': selected_cuisine,
         'selected_subcuisine': selected_subcuisine,
@@ -3481,1497 +3988,6 @@ def package_delete(request, _id):
 
     packages.delete()
     return HttpResponseRedirect(reverse('package-index'))
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLOSING-PERIOD')
-def closing_index(request):
-    periods = Closing.objects.all()
-
-    context = {
-        'data': periods,
-        'notif': order_notification(request),
-        'segment': 'closing_period',
-        'group_segment': 'master',
-        'crud': 'index',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='CLOSING-PERIOD') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/closing_index.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLOSING-PERIOD')
-def closing_add(request):
-    if request.POST:
-        form = FormClosing(request.POST, request.FILES)
-        if form.is_valid():
-            form.save()
-            return HttpResponseRedirect(reverse('closing-index'))
-    else:
-        last_month = (datetime.datetime(datetime.datetime.now(
-        ).year, datetime.datetime.now().month, 1) - datetime.timedelta(days=1)).month
-        last_year = (datetime.datetime(datetime.datetime.now(
-        ).year, datetime.datetime.now().month, 1) - datetime.timedelta(days=1)).year
-
-        form = FormClosing(initial={'year_closed': last_year, 'month_closed': last_month,
-                           'year_open': datetime.datetime.now().year, 'month_open': datetime.datetime.now().month})
-
-    context = {
-        'form': form,
-        'notif': order_notification(request),
-        'segment': 'closing_period',
-        'group_segment': 'master',
-        'crud': 'add',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='CLOSING-PERIOD') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/closing_add.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLOSING-PERIOD')
-def closing_update(request, _id):
-    period = Closing.objects.get(document=_id)
-
-    if request.POST:
-        form = FormClosingUpdate(request.POST, request.FILES, instance=period)
-        if form.is_valid():
-            form.save()
-            return HttpResponseRedirect(reverse('closing-view', args=[_id, ]))
-    else:
-        form = FormClosingUpdate(instance=period)
-
-    YEAR_CHOICES = []
-    for r in range((datetime.datetime.now().year-1), (datetime.datetime.now().year+2)):
-        YEAR_CHOICES.append(str(r))
-
-    MONTH_CHOICES = []
-    for r in range(1, 13):
-        MONTH_CHOICES.append(str(r))
-
-    context = {
-        'form': form,
-        'data': period,
-        'years': YEAR_CHOICES,
-        'months': MONTH_CHOICES,
-        'notif': order_notification(request),
-        'segment': 'closing_period',
-        'group_segment': 'master',
-        'crud': 'update',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='CLOSING-PERIOD') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/closing_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLOSING-PERIOD')
-def closing_delete(request, _id):
-    periods = Closing.objects.get(document=_id)
-    periods.delete()
-
-    return HttpResponseRedirect(reverse('closing-index'))
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLOSING-PERIOD')
-def closing_view(request, _id):
-    period = Closing.objects.get(document=_id)
-    form = FormClosingView(instance=period)
-
-    YEAR_CHOICES = []
-    for r in range((datetime.datetime.now().year-1), (datetime.datetime.now().year+2)):
-        YEAR_CHOICES.append(str(r))
-
-    MONTH_CHOICES = []
-    for r in range(1, 13):
-        MONTH_CHOICES.append(str(r))
-
-    context = {
-        'data': period,
-        'form': form,
-        'years': YEAR_CHOICES,
-        'months': MONTH_CHOICES,
-        'notif': order_notification(request),
-        'segment': 'closing_period',
-        'group_segment': 'master',
-        'crud': 'view',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='CLOSING-PERIOD') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/closing_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DIVISION')
-def division_index(request):
-    divisions = Division.objects.all()
-
-    context = {
-        'data': divisions,
-        'notif': order_notification(request),
-        'segment': 'division',
-        'group_segment': 'master',
-        'crud': 'index',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='DIVISION') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/division_index.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DIVISION')
-def division_add(request):
-    if request.POST:
-        form = FormDivision(request.POST, request.FILES)
-        if form.is_valid():
-            form.save()
-            return HttpResponseRedirect(reverse('division-index'))
-    else:
-        form = FormDivision()
-
-    context = {
-        'form': form,
-        'notif': order_notification(request),
-        'segment': 'division',
-        'group_segment': 'master',
-        'crud': 'add',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='DIVISION') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/division_add.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DIVISION')
-def division_update(request, _id):
-    division = Division.objects.get(division_id=_id)
-
-    if request.POST:
-        form = FormDivisionUpdate(
-            request.POST, request.FILES, instance=division)
-        if form.is_valid():
-            form.save()
-            return HttpResponseRedirect(reverse('division-index'))
-    else:
-        form = FormDivisionUpdate(instance=division)
-
-    context = {
-        'form': form,
-        'data': division,
-        'notif': order_notification(request),
-        'segment': 'division',
-        'group_segment': 'master',
-        'crud': 'update',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='DIVISION') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/division_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DIVISION')
-def division_delete(request, _id):
-    division = Division.objects.get(division_id=_id)
-    division.delete()
-
-    return HttpResponseRedirect(reverse('division-index'))
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='DIVISION')
-def division_view(request, _id):
-    division = Division.objects.get(division_id=_id)
-    form = FormDivisionView(instance=division)
-
-    context = {
-        'data': division,
-        'form': form,
-        'notif': order_notification(request),
-        'segment': 'division',
-        'group_segment': 'master',
-        'crud': 'view',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='DIVISION') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/division_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM')
-def claim_index(request, _tab):
-    claims = Claim.objects.all().order_by('-claim_id')
-    drafts = Claim.objects.filter(status='DRAFT', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').all
-    draft_count = Claim.objects.filter(status='DRAFT', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').count
-    pendings = Claim.objects.filter(status='PENDING', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').all
-    pending_count = Claim.objects.filter(status='PENDING', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').count
-    inapprovals = Claim.objects.filter(status='IN APPROVAL', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').all
-    inapproval_count = Claim.objects.filter(status='IN APPROVAL', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').count
-    opens = Claim.objects.filter(status='OPEN', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').all
-    open_count = Claim.objects.filter(status='OPEN', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').count
-
-    context = {
-        'data': claims,
-        'drafts': drafts,
-        'draft_count': draft_count,
-        'pendings': pendings,
-        'pending_count': pending_count,
-        'inapprovals': inapprovals,
-        'inapproval_count': inapproval_count,
-        'opens': opens,
-        'open_count': open_count,
-        'tab': _tab,
-        'notif': order_notification(request),
-        'segment': 'claim',
-        'group_segment': 'claim',
-        'crud': 'index',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='CLAIM') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/claim_index.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM')
-def claim_add(request, _area, _distributor, _program):
-    selected_area = _area
-    selected_distributor = _distributor
-    selected_program = _program
-    program = Program.objects.get(
-        program_id=selected_program) if selected_program != '0' else None
-    area = AreaUser.objects.filter(user_id=request.user.user_id).values_list(
-        'area_id', 'area__area_name')
-    distributors = Program.objects.filter(status='OPEN', area=selected_area).values_list(
-        'proposal__budget__budget_distributor__distributor_id', 'proposal__budget__budget_distributor__distributor_name').distinct() if selected_area != '0' else None
-    programs = Program.objects.filter(status='OPEN', deadline__gte=datetime.datetime.now().date(
-    ), area=selected_area, proposal__budget__budget_distributor__distributor_id=selected_distributor, proposal__balance__gt=0).distinct() if selected_distributor != '0' else None
-    proposal = Proposal.objects.get(
-        proposal_id=program.proposal.proposal_id) if selected_program != '0' else None
-    proposals = Proposal.objects.filter(
-        status='OPEN', area=selected_area, balance__gt=0, budget__budget_distributor=selected_distributor).order_by('-proposal_id') if selected_distributor != '0' else None
-
-    no_save = False
-    add_prop = '0'
-    message = ''
-    difference = 0
-    add_proposals = None
-
-    if selected_area != '0' and selected_program != '0':
-        approvers = ClaimMatrix.objects.filter(
-            area_id=selected_area, channel=program.proposal.channel).order_by('sequence')
-        if approvers.count() == 0 or approvers[0].limit > 0:
-            no_save = True
-            message = "No claim's approver found for this area and channel."
-
-    try:
-        _no = Claim.objects.all().order_by('seq_number').last()
-    except Claim.DoesNotExist:
-        _no = None
-    if _no is None:
-        format_no = '{:04d}'.format(1)
-    else:
-        format_no = '{:04d}'.format(_no.seq_number + 1)
-
-    _id = 'CBS-4' + format_no + '/' + program.proposal.channel + '/' + selected_area + '/' + \
-        program.proposal.budget.budget_distributor.distributor_id + '/' + \
-        datetime.datetime.now().strftime('%m/%Y') if selected_program != '0' else 'CBS-4' + format_no + '/' + selected_area + '/0' + \
-        '/' + datetime.datetime.now().strftime('%m/%Y')
-
-    if request.POST:
-        form = FormClaim(request.POST, request.FILES)
-        difference = int(request.POST.get('amount')) - int(proposal.balance)
-        if int(request.POST.get('amount')) > int(proposal.balance) and request.POST.get('additional_proposal') == '':
-            add_prop = '1'
-            message = 'Claim amount is greater than proposal balance.'
-            add_proposals = Proposal.objects.filter(status='OPEN', area=selected_area, channel=proposal.channel, balance__gte=difference, budget__budget_distributor=selected_distributor).exclude(
-                proposal_id=proposal.proposal_id).order_by('-proposal_id') if selected_program != '0' else None
-        else:
-            if form.is_valid():
-                draft = form.save(commit=False)
-                draft.program_id = selected_program
-                draft.seq_number = _no.seq_number + 1 if _no else 1
-                draft.entry_pos = request.user.position.position_id
-                draft.total_claim = Decimal(request.POST.get('amount'))
-                draft.amount = proposal.balance if request.POST.get(
-                    'additional_proposal') else Decimal(request.POST.get('amount'))
-                draft.additional_proposal_id = request.POST.get(
-                    'additional_proposal')
-                draft.additional_amount = difference if request.POST.get(
-                    'additional_proposal') else 0
-                draft.save()
-
-                sum_amount = Claim.objects.filter(
-                    proposal_id=draft.proposal_id).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-                sum_add_amount = Claim.objects.filter(additional_proposal=draft.proposal_id).exclude(
-                    status__in=['REJECTED', 'DRAFT']).aggregate(Sum('additional_amount'))
-
-                sum_amount2 = Claim.objects.filter(
-                    proposal_id=draft.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-                sum_add_amount2 = Claim.objects.filter(additional_proposal=draft.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(
-                    Sum('additional_amount'))
-
-                amount = sum_amount.get('amount__sum') if sum_amount.get(
-                    'amount__sum') else 0
-                additional_amount = sum_add_amount.get(
-                    'additional_amount__sum') if sum_add_amount.get('additional_amount__sum') else 0
-
-                amount2 = sum_amount2.get('amount__sum') if sum_amount2.get(
-                    'amount__sum') else 0
-                additional_amount2 = sum_add_amount2.get('additional_amount__sum') if sum_add_amount2.get(
-                    'additional_amount__sum') else 0
-
-                proposal.proposal_claim = amount + additional_amount
-                proposal.balance = proposal.total_cost - proposal.proposal_claim
-                proposal.save()
-
-                proposal2 = Proposal.objects.get(
-                    proposal_id=draft.additional_proposal_id) if draft.additional_proposal else None
-                if proposal2:
-                    proposal2.proposal_claim = amount2 + additional_amount2
-                    proposal2.balance = proposal2.total_cost - proposal2.proposal_claim
-                    proposal2.save()
-
-                for approver in approvers:
-                    release = ClaimRelease(
-                        claim_id=draft.claim_id,
-                        claim_approval_id=approver.approver_id,
-                        claim_approval_name=approver.approver.username,
-                        claim_approval_email=approver.approver.email,
-                        claim_approval_position=approver.approver.position.position_id,
-                        sequence=approver.sequence,
-                        limit=approver.limit,
-                        return_to=approver.return_to,
-                        approve=approver.approve,
-                        revise=approver.revise,
-                        returned=approver.returned,
-                        reject=approver.reject,
-                        notif=approver.notif,
-                        printed=approver.printed,
-                        as_approved=approver.as_approved)
-                    release.save()
-
-                mail_sent = ClaimRelease.objects.filter(
-                    claim_id=_id).order_by('sequence').values_list('mail_sent', flat=True)
-                if mail_sent[0] == False:
-                    email = ClaimRelease.objects.filter(
-                        claim_id=_id).order_by('sequence').values_list('claim_approval_email', flat=True)
-                    with connection.cursor() as cursor:
-                        cursor.execute(
-                            "SELECT username FROM apps_claimrelease INNER JOIN apps_user ON apps_claimrelease.claim_approval_id = apps_user.user_id WHERE claim_id = '" + str(_id) + "' AND claim_approval_status = 'N' ORDER BY sequence LIMIT 1")
-                        approver = cursor.fetchone()
-
-                    subject = 'Claim Approval'
-                    msg = 'Dear ' + approver[0] + ',\n\nYou have a new claim to approve. Please check your claim release list.\n\n' + \
-                        'Click this link to approve, revise, return or reject this claim.\n' + host.url + 'claim_release/view/' + str(_id) + '/0/' + \
-                        '\n\nThank you.'
-                    send_email(subject, msg, [email[0]])
-
-                    # update mail sent to true
-                    release = ClaimRelease.objects.filter(
-                        claim_id=_id).order_by('sequence').first()
-                    release.mail_sent = True
-                    release.save()
-
-                return HttpResponseRedirect(reverse('claim-index', args=['pending', ]))
-    else:
-        form = FormClaim(initial={'area': selected_area, 'claim_id': _id})
-
-    msg = form.errors
-    context = {
-        'form': form,
-        'area': area,
-        'distributors': distributors,
-        'program': program,
-        'programs': programs,
-        'proposals': proposals,
-        'add_proposals': add_proposals,
-        'selected_area': selected_area,
-        'selected_distributor': selected_distributor,
-        'selected_program': selected_program,
-        'msg': msg,
-        'message': message,
-        'no_save': no_save,
-        'add_prop': add_prop,
-        'difference': difference,
-        'notif': order_notification(request),
-        'segment': 'claim',
-        'group_segment': 'claim',
-        'crud': 'add',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(
-            user_id=request.user.user_id, menu_id='CLAIM') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/claim_add.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM')
-def claim_view(request, _tab, _id):
-    claim = Claim.objects.get(claim_id=_id)
-    form = FormClaimView(instance=claim)
-    program = Program.objects.get(program_id=claim.program_id)
-
-    highest_approval = ClaimRelease.objects.filter(
-        claim_id=_id, limit__gt=claim.total_claim).aggregate(Min('sequence')) if ClaimRelease.objects.filter(claim_id=_id, limit__gt=claim.total_claim).count() > 0 else ClaimRelease.objects.filter(claim_id=_id).aggregate(Max('sequence'))
-    highest_sequence = highest_approval.get('sequence__min') if highest_approval.get(
-        'sequence__min') else highest_approval.get('sequence__max') + 1
-    if highest_sequence:
-        approval = ClaimRelease.objects.filter(
-            claim_id=_id, sequence__lt=highest_sequence).order_by('sequence')
-    else:
-        approval = ClaimRelease.objects.filter(
-            claim_id=_id).order_by('sequence')
-
-    context = {
-        'data': claim,
-        'form': form,
-        'tab': _tab,
-        'program': program,
-        'approval': approval,
-        'status': claim.status,
-        'notif': order_notification(request),
-        'segment': 'claim',
-        'group_segment': 'claim',
-        'crud': 'view',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(
-            user_id=request.user.user_id, menu_id='CLAIM') if not request.user.is_superuser else Auth.objects.all(),
-    }
-
-    return render(request, 'home/claim_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM')
-def claim_update(request, _tab, _id):
-    claim = Claim.objects.get(claim_id=_id)
-    proposals = Proposal.objects.filter(
-        status='OPEN', area=claim.area, balance__gt=0, budget__budget_distributor=claim.proposal.budget.budget_distributor).order_by('-proposal_id')
-    program = Program.objects.get(program_id=claim.program_id)
-    proposal = Proposal.objects.get(proposal_id=program.proposal.proposal_id)
-
-    message = '0'
-    add_prop = '0'
-    difference = 0
-    add_proposals = None
-    add_prop_before = claim.additional_proposal
-    amount_before = claim.amount
-
-    if request.POST:
-        form = FormClaimUpdate(request.POST, request.FILES, instance=claim)
-        difference = int(request.POST.get('amount')) - \
-            (int(proposal.balance) + int(claim.amount))
-        if int(request.POST.get('amount')) > (int(program.proposal.balance) + int(claim.amount)) and request.POST.get('additional_proposal') == '':
-            add_prop = '1'
-            message = 'Claim amount is greater than proposal balance.'
-            add_proposals = Proposal.objects.filter(status='OPEN', area=claim.area.area_id, channel=proposal.channel, balance__gte=difference, budget__budget_distributor=claim.proposal.budget.budget_distributor).exclude(
-                proposal_id=proposal.proposal_id)
-        else:
-            if form.is_valid():
-                draft = form.save(commit=False)
-                draft.status = 'PENDING'
-                draft.total_claim = Decimal(request.POST.get('amount'))
-                draft.amount = proposal.balance + amount_before if request.POST.get(
-                    'additional_proposal') else Decimal(request.POST.get('amount'))
-                if int(request.POST.get('amount')) > (int(proposal.balance) + int(amount_before)):
-                    draft.additional_proposal = request.POST.get(
-                        'additional_proposal')
-                else:
-                    draft.additional_proposal = None
-                draft.additional_amount = difference if request.POST.get(
-                    'additional_proposal') else 0
-                draft.save()
-
-                sum_amount = Claim.objects.filter(
-                    proposal_id=draft.proposal_id).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-                sum_add_amount = Claim.objects.filter(additional_proposal=draft.proposal_id).exclude(
-                    status__in=['REJECTED', 'DRAFT']).aggregate(Sum('additional_amount'))
-
-                sum_amount2 = Claim.objects.filter(
-                    proposal_id=draft.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-                sum_add_amount2 = Claim.objects.filter(additional_proposal=draft.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(
-                    Sum('additional_amount'))
-
-                amount = sum_amount.get('amount__sum') if sum_amount.get(
-                    'amount__sum') else 0
-                additional_amount = sum_add_amount.get(
-                    'additional_amount__sum') if sum_add_amount.get('additional_amount__sum') else 0
-
-                amount2 = sum_amount2.get('amount__sum') if sum_amount2.get(
-                    'amount__sum') else 0
-                additional_amount2 = sum_add_amount2.get('additional_amount__sum') if sum_add_amount2.get(
-                    'additional_amount__sum') else 0
-
-                proposal.proposal_claim = amount + additional_amount
-                proposal.balance = proposal.total_cost - proposal.proposal_claim
-                proposal.save()
-
-                proposal2 = Proposal.objects.get(
-                    proposal_id=draft.additional_proposal) if draft.additional_proposal else None
-                if proposal2:
-                    proposal2.proposal_claim = amount2 + additional_amount2
-                    proposal2.balance = proposal2.total_cost - proposal2.proposal_claim
-                    proposal2.save()
-                else:
-                    proposal3 = Proposal.objects.get(
-                        proposal_id=add_prop_before) if add_prop_before else None
-                    if proposal3:
-                        proposal3.proposal_claim = amount2 + additional_amount2
-                        proposal3.balance = proposal3.total_cost - proposal3.proposal_claim
-                        proposal3.save()
-
-                mail_sent = ClaimRelease.objects.filter(
-                    claim_id=_id).order_by('sequence').values_list('mail_sent', flat=True)
-                if mail_sent[0] == False:
-                    email = ClaimRelease.objects.filter(
-                        claim_id=_id).order_by('sequence').values_list('claim_approval_email', flat=True)
-                    with connection.cursor() as cursor:
-                        cursor.execute(
-                            "SELECT username FROM apps_claimrelease INNER JOIN apps_user ON apps_claimrelease.claim_approval_id = apps_user.user_id WHERE claim_id = '" + str(_id) + "' AND claim_approval_status = 'N' ORDER BY sequence LIMIT 1")
-                        approver = cursor.fetchone()
-
-                    subject = 'Claim Approval'
-                    msg = 'Dear ' + approver[0] + ',\n\nYou have a new claim to approve. Please check your claim release list.\n\n' + \
-                        'Click this link to approve, revise, return or reject this claim.\n' + host.url + 'claim_release/view/' + str(_id) + '/0/' + \
-                        '\n\nThank you.'
-                    send_email(subject, msg, [email[0]])
-
-                    # update mail sent to true
-                    release = ClaimRelease.objects.filter(
-                        claim_id=_id).order_by('sequence').first()
-                    release.mail_sent = True
-                    release.save()
-
-                return HttpResponseRedirect(reverse('claim-view', args=[_tab, _id]))
-    else:
-        form = FormClaimUpdate(instance=claim)
-
-    err = form.errors
-    context = {
-        'form': form,
-        'data': claim,
-        'program': program,
-        'proposals': proposals,
-        'add_proposals': add_proposals,
-        'add_prop': add_prop,
-        'difference': difference,
-        'tab': _tab,
-        'message': message,
-        'err': err,
-        'notif': order_notification(request),
-        'segment': 'claim',
-        'group_segment': 'claim',
-        'crud': 'update',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='CLAIM') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/claim_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM')
-def claim_delete(request, _tab, _id):
-    claim = Claim.objects.get(claim_id=_id)
-    proposal = Proposal.objects.get(proposal_id=claim.proposal.proposal_id)
-    claim.delete()
-
-    sum_amount = Claim.objects.filter(
-        proposal_id=claim.proposal_id).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-    sum_add_amount = Claim.objects.filter(additional_proposal=claim.proposal_id).exclude(
-        status__in=['REJECTED', 'DRAFT']).aggregate(Sum('additional_amount'))
-
-    sum_amount2 = Claim.objects.filter(
-        proposal_id=claim.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-    sum_add_amount2 = Claim.objects.filter(additional_proposal=claim.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(
-        Sum('additional_amount'))
-
-    amount = sum_amount.get('amount__sum') if sum_amount.get(
-        'amount__sum') else 0
-    additional_amount = sum_add_amount.get(
-        'additional_amount__sum') if sum_add_amount.get('additional_amount__sum') else 0
-
-    amount2 = sum_amount2.get('amount__sum') if sum_amount2.get(
-        'amount__sum') else 0
-    additional_amount2 = sum_add_amount2.get('additional_amount__sum') if sum_add_amount2.get(
-        'additional_amount__sum') else 0
-
-    proposal.proposal_claim = amount + additional_amount
-    proposal.balance = proposal.total_cost - proposal.proposal_claim
-    proposal.save()
-
-    proposal2 = Proposal.objects.get(
-        proposal_id=claim.additional_proposal) if claim.additional_proposal else None
-    if proposal2:
-        proposal2.proposal_claim = amount2 + additional_amount2
-        proposal2.balance = proposal2.total_cost - proposal2.proposal_claim
-        proposal2.save()
-
-    return HttpResponseRedirect(reverse('claim-index', args=[_tab, ]))
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-RELEASE')
-def claim_release_index(request):
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT apps_claim.claim_id, apps_claim.claim_date, apps_distributor.distributor_name, apps_proposal.channel, apps_claim.total_claim, apps_claim.status, apps_claimrelease.sequence FROM apps_distributor INNER JOIN apps_budget ON apps_distributor.distributor_id = apps_budget.budget_distributor_id INNER JOIN apps_proposal ON apps_budget.budget_id = apps_proposal.budget_id INNER JOIN apps_claim ON apps_proposal.proposal_id = apps_claim.proposal_id INNER JOIN apps_claimrelease ON apps_claim.claim_id = apps_claimrelease.claim_id INNER JOIN (SELECT claim_id, MIN(sequence) AS seq FROM apps_claimrelease WHERE claim_approval_status = 'N' GROUP BY claim_id ORDER BY sequence ASC) AS q_group ON apps_claimrelease.claim_id = q_group.claim_id AND apps_claimrelease.sequence = q_group.seq WHERE (apps_claim.status = 'PENDING' OR apps_claim.status = 'IN APPROVAL') AND apps_claimrelease.claim_approval_id = '" + str(request.user.user_id) + "'")
-        release = cursor.fetchall()
-
-    context = {
-        'data': release,
-        'notif': order_notification(request),
-        'segment': 'claim_release',
-        'group_segment': 'claim',
-        'crud': 'index',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='CLAIM-RELEASE') if not request.user.is_superuser else Auth.objects.all(),
-    }
-
-    return render(request, 'home/claim_release_index.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-RELEASE')
-def claim_release_view(request, _id, _is_revise):
-    claim = Claim.objects.get(claim_id=_id)
-    form = FormClaimView(instance=claim)
-    approved = ClaimRelease.objects.get(
-        claim_id=_id, claim_approval_id=request.user.user_id).claim_approval_status
-    program = Program.objects.get(program_id=claim.program_id)
-
-    context = {
-        'form': form,
-        'data': claim,
-        'approved': approved,
-        'program': program,
-        'is_revise': _is_revise,
-        'status': claim.status,
-        'notif': order_notification(request),
-        'segment': 'claim_release',
-        'group_segment': 'claim',
-        'crud': 'view',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='CLAIM-RELEASE') if not request.user.is_superuser else Auth.objects.all(),
-        'btn_release': ClaimRelease.objects.get(claim_id=_id, claim_approval_id=request.user.user_id),
-    }
-    return render(request, 'home/claim_release_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-RELEASE')
-def claim_release_update(request, _id):
-    claim = Claim.objects.get(claim_id=_id)
-    program = Program.objects.get(program_id=claim.program_id)
-    proposal = Proposal.objects.get(proposal_id=claim.proposal.proposal_id)
-    proposals = Proposal.objects.filter(
-        status='OPEN', area=claim.area, balance__gt=0, budget__budget_distributor=claim.proposal.budget.budget_distributor).order_by('-proposal_id')
-    message = '0'
-    add_prop = '0'
-    difference = 0
-    add_proposals = None
-    add_prop_before = claim.additional_proposal
-    amount_before = claim.amount
-    _invoice = claim.invoice
-    _invoice_date = claim.invoice_date
-    _due_date = claim.due_date
-    _amount = claim.amount
-    _remarks = claim.remarks
-    _additional_proposal = claim.additional_proposal
-    _additional_amount = claim.additional_amount
-
-    if request.POST:
-        form = FormClaimUpdate(
-            request.POST, request.FILES, instance=claim)
-        difference = int(request.POST.get('amount')) - \
-            (int(proposal.balance) + int(claim.amount))
-        if int(request.POST.get('amount')) > (int(proposal.balance) + int(claim.amount)) and request.POST.get('additional_proposal') == '':
-            add_prop = '1'
-            message = 'Claim amount is greater than proposal balance.'
-            add_proposals = Proposal.objects.filter(status='OPEN', area=claim.area.area_id, channel=proposal.channel, balance__gte=difference, budget__budget_distributor=claim.proposal.budget.budget_distributor).exclude(
-                proposal_id=proposal.proposal_id).order_by('-proposal_id')
-        else:
-            if form.is_valid():
-                parent = form.save(commit=False)
-                invoice = _invoice if form.cleaned_data['invoice'] != _invoice else None
-                invoice_date = _invoice_date if form.cleaned_data[
-                    'invoice_date'] != _invoice_date else None
-                due_date = _due_date if form.cleaned_data['due_date'] != _due_date else None
-                claim_amount = _amount if form.cleaned_data['amount'] != _amount else None
-                remarks = _remarks if form.cleaned_data['remarks'] != _remarks else None
-                additional_proposal = _additional_proposal if request.POST.get(
-                    'additional_proposal') != _additional_proposal else None
-                add_amount = _additional_amount if request.POST.get(
-                    'additional_amount') != _additional_amount else None
-                parent.total_claim = Decimal(request.POST.get('amount'))
-                parent.amount = proposal.balance + amount_before if request.POST.get(
-                    'additional_proposal') else Decimal(request.POST.get('amount'))
-                if int(request.POST.get('amount')) > (int(proposal.balance) + int(amount_before)):
-                    parent.additional_proposal_id = request.POST.get(
-                        'additional_proposal')
-                else:
-                    parent.additional_proposal_id = None
-                parent.additional_amount = difference if request.POST.get(
-                    'additional_proposal') else 0
-                parent.save()
-
-                sum_amount = Claim.objects.filter(
-                    proposal_id=parent.proposal_id).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-                sum_add_amount = Claim.objects.filter(additional_proposal=parent.proposal_id).exclude(
-                    status__in=['REJECTED', 'DRAFT']).aggregate(Sum('additional_amount'))
-
-                sum_amount2 = Claim.objects.filter(
-                    proposal_id=parent.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-                sum_add_amount2 = Claim.objects.filter(additional_proposal=parent.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(
-                    Sum('additional_amount'))
-
-                amount = sum_amount.get('amount__sum') if sum_amount.get(
-                    'amount__sum') else 0
-                additional_amount = sum_add_amount.get(
-                    'additional_amount__sum') if sum_add_amount.get('additional_amount__sum') else 0
-
-                amount2 = sum_amount2.get('amount__sum') if sum_amount2.get(
-                    'amount__sum') else 0
-                additional_amount2 = sum_add_amount2.get('additional_amount__sum') if sum_add_amount2.get(
-                    'additional_amount__sum') else 0
-
-                proposal.proposal_claim = amount + additional_amount
-                proposal.balance = proposal.total_cost - proposal.proposal_claim
-                proposal.save()
-
-                proposal2 = Proposal.objects.get(
-                    proposal_id=parent.additional_proposal) if parent.additional_proposal else None
-                if proposal2:
-                    proposal2.proposal_claim = amount2 + additional_amount2
-                    proposal2.balance = proposal2.total_cost - proposal2.proposal_claim
-                    proposal2.save()
-                else:
-                    proposal3 = Proposal.objects.get(
-                        proposal_id=add_prop_before) if add_prop_before else None
-                    if proposal3:
-                        proposal3.proposal_claim = amount2 + additional_amount2
-                        proposal3.balance = proposal3.total_cost - proposal3.proposal_claim
-                        proposal3.save()
-
-                recipients = []
-
-                release = ClaimRelease.objects.get(
-                    claim_id=_id, claim_approval_id=request.user.user_id)
-                release.revise_note = request.POST.get('revise_note')
-                release.save()
-
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT claim_id, email FROM apps_claim INNER JOIN apps_user ON apps_claim.entry_by = apps_user.user_id WHERE claim_id = '" + str(_id) + "'")
-                    entry_mail = cursor.fetchone()
-                    if entry_mail:
-                        recipients.append(entry_mail[1])
-
-                    cursor.execute(
-                        "SELECT claim_id, email FROM apps_claim INNER JOIN apps_user ON apps_claim.update_by = apps_user.user_id WHERE claim_id = '" + str(_id) + "'")
-                    update_mail = cursor.fetchone()
-                    if update_mail:
-                        recipients.append(update_mail[1])
-
-                    cursor.execute(
-                        "SELECT claim_id, claim_approval_email FROM apps_claimrelease WHERE claim_id = '" + str(_id) + "' AND claim_approval_status = 'Y'")
-                    approver_mail = cursor.fetchall()
-                    for mail in approver_mail:
-                        recipients.append(mail[1])
-
-                subject = 'Claim Revised'
-                msg = 'Dear All,\n\nThe following is revised claim for Claim No. ' + \
-                    str(_id) + ':\n'
-                if invoice:
-                    msg += '\nBEFORE\n'
-                    msg += 'Invoice: ' + str(invoice) + '\n'
-                    msg += '\nAFTER\n'
-                    msg += 'Invoice: ' + \
-                        form.cleaned_data['invoice'] + '\n'
-
-                if invoice_date:
-                    msg += '\nBEFORE\n'
-                    msg += 'Invoice Date: ' + \
-                        invoice_date.strftime('%d %b %Y') + '\n'
-                    msg += '\nAFTER\n'
-                    msg += 'Invoice Date: ' + \
-                        form.cleaned_data['invoice_date'].strftime(
-                            '%d %b %Y') + '\n'
-
-                if due_date:
-                    msg += '\nBEFORE\n'
-                    msg += 'Due Date: ' + \
-                        due_date.strftime('%d %b %Y') + '\n'
-                    msg += '\nAFTER\n'
-                    msg += 'Due Date: ' + \
-                        form.cleaned_data['due_date'].strftime(
-                            '%d %b %Y') + '\n'
-
-                if claim_amount:
-                    msg += '\nBEFORE\n'
-                    msg += 'Amount: ' + str(claim_amount) + '\n'
-                    msg += '\nAFTER\n'
-                    msg += 'Amount: ' + \
-                        str(form.cleaned_data['amount']) + '\n'
-
-                if remarks:
-                    msg += '\nBEFORE\n'
-                    msg += 'Remarks: ' + str(remarks) + '\n'
-                    msg += '\nAFTER\n'
-                    msg += 'Remarks: ' + \
-                        form.cleaned_data['remarks'] + '\n'
-
-                if additional_proposal:
-                    msg += '\nBEFORE\n'
-                    msg += 'Additional Proposal: ' + \
-                        str(additional_proposal) + '\n'
-                    msg += '\nAFTER\n'
-                    msg += 'Additional Proposal: ' + \
-                        request.POST.get('additional_proposal') + '\n'
-
-                if add_amount:
-                    msg += '\nBEFORE\n'
-                    msg += 'Additional Amount: ' + \
-                        str(add_amount) + '\n'
-                    msg += '\nAFTER\n'
-                    msg += 'Additional Amount: ' + \
-                        request.POST.get('additional_amount') + '\n'
-
-                msg += '\nNote: ' + \
-                    str(release.revise_note) + '\n\nClick the following link to view the claim.\n' + host.url + 'claim/view/inapproval/' + str(_id) + '/' + \
-                    '\n\nThank you.'
-
-                recipient_list = list(dict.fromkeys(recipients))
-                send_email(subject, msg, recipient_list)
-
-                return HttpResponseRedirect(reverse('claim-release-view', args=[_id, 0]))
-    else:
-        form = FormClaimUpdate(instance=claim)
-
-    # msg = form.errors
-    context = {
-        'form': form,
-        'data': claim,
-        'program': program,
-        'message': message,
-        'add_prop': add_prop,
-        'add_proposals': add_proposals,
-        'proposals': proposals,
-        'difference': difference,
-        'notif': order_notification(request),
-        'segment': 'claim_release',
-        'group_segment': 'claim',
-        'crud': 'update',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id,
-                                menu_id='CLAIM-RELEASE') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/claim_release_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-RELEASE')
-def claim_release_approve(request, _id):
-    claim = Claim.objects.get(claim_id=_id)
-    release = ClaimRelease.objects.get(
-        claim_id=_id, claim_approval_id=request.user.user_id)
-    release.claim_approval_status = 'Y'
-    release.claim_approval_date = timezone.now()
-    release.save()
-
-    highest_approval = ClaimRelease.objects.filter(
-        claim_id=_id, limit__gt=claim.total_claim).aggregate(Min('sequence')) if ClaimRelease.objects.filter(claim_id=_id, limit__gt=claim.total_claim).count() > 0 else ClaimRelease.objects.filter(claim_id=_id).aggregate(Max('sequence'))
-    highest_sequence = highest_approval.get('sequence__min') if highest_approval.get(
-        'sequence__min') else highest_approval.get('sequence__max') + 1
-    if highest_sequence:
-        approval = ClaimRelease.objects.filter(
-            claim_id=_id, sequence__lt=highest_sequence).order_by('sequence').last()
-    else:
-        approval = ClaimRelease.objects.filter(
-            claim_id=_id).order_by('sequence').last()
-
-    if release.sequence == approval.sequence:
-        claim.status = 'OPEN'
-
-        recipients = []
-
-        maker = claim.entry_by
-        maker_mail = User.objects.get(user_id=maker).email
-        recipients.append(maker_mail)
-
-        approvers = ClaimRelease.objects.filter(
-            claim_id=_id, notif=True, claim_approval_status='Y')
-        for i in approvers:
-            recipients.append(i.claim_approval_email)
-
-        subject = 'Claim Approved'
-        msg = 'Dear All,\n\nClaim No. ' + str(_id) + ' has been approved.\n\nClick the following link to view the claim.\n' + host.url + 'claim/view/open/' + str(_id) + \
-            '\n\nThank you.'
-        recipient_list = list(dict.fromkeys(recipients))
-        send_email(subject, msg, recipient_list)
-    else:
-        claim.status = 'IN APPROVAL'
-
-        email = ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='N').order_by(
-            'sequence').values_list('claim_approval_email', flat=True)
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT claim_approval_name FROM apps_claimrelease WHERE claim_id = '" + str(_id) + "' AND claim_approval_status = 'N' ORDER BY sequence LIMIT 1")
-            approver = cursor.fetchone()
-
-        subject = 'Claim Approval'
-        msg = 'Dear ' + approver[0] + ',\n\nYou have a new claim to approve. Please check your claim release list.\n\n' + \
-            'Click this link to approve, revise, return or reject this claim.\n' + host.url + 'claim_release/view/' + str(_id) + '/0/' + \
-            '\n\nThank you.'
-        send_email(subject, msg, [email[0]])
-
-    claim.save()
-
-    return HttpResponseRedirect(reverse('claim-release-index'))
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-RELEASE')
-def claim_release_return(request, _id):
-    recipients = []
-    draft = False
-
-    try:
-        return_to = ClaimRelease.objects.get(
-            claim_id=_id, return_to=True, sequence__lt=ClaimRelease.objects.get(claim_id=_id, claim_approval_id=request.user.user_id).sequence)
-
-        if return_to:
-            approvers = ClaimRelease.objects.filter(
-                claim_id=_id, sequence__gte=ClaimRelease.objects.get(claim_id=_id, return_to=True).sequence, sequence__lt=ClaimRelease.objects.get(claim_id=_id, claim_approval_id=request.user.user_id).sequence)
-    except ClaimRelease.DoesNotExist:
-        approvers = ClaimRelease.objects.filter(
-            claim_id=_id, sequence__lte=ClaimRelease.objects.get(claim_id=_id, claim_approval_id=request.user.user_id).sequence)
-        draft = True
-
-    for i in approvers:
-        recipients.append(i.claim_approval_email)
-        i.claim_approval_status = 'N'
-        i.claim_approval_date = None
-        i.revise_note = ''
-        i.return_note = ''
-        i.reject_note = ''
-        i.mail_sent = False
-        i.save()
-
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT claim_id, email FROM apps_claim INNER JOIN apps_user ON apps_claim.entry_by = apps_user.user_id WHERE claim_id = '" + str(_id) + "'")
-        entry_mail = cursor.fetchone()
-        if entry_mail:
-            recipients.append(entry_mail[1])
-
-        cursor.execute(
-            "SELECT claim_id, email FROM apps_claim INNER JOIN apps_user ON apps_claim.update_by = apps_user.user_id WHERE claim_id = '" + str(_id) + "'")
-        update_mail = cursor.fetchone()
-        if update_mail:
-            recipients.append(update_mail[1])
-
-    note = ClaimRelease.objects.get(
-        claim_id=_id, claim_approval_id=request.user.user_id)
-    note.return_note = request.POST.get('return_note')
-    note.save()
-
-    subject = 'Claim Returned'
-    msg = 'Dear All,\n\nClaim No. ' + str(_id) + ' has been returned.\n\nNote: ' + \
-        str(note.return_note) + \
-        '\n\nClick the following link to revise the claim.\n'
-
-    if draft:
-        claim = Claim.objects.get(claim_id=_id)
-        claim.status = 'DRAFT'
-        claim.save()
-        msg += host.url + 'claim/view/pending/' + str(_id) + \
-            '\n\nThank you.'
-    else:
-        msg += host.url + 'claim_release/view/' + \
-            str(_id) + '/0/\n\nThank you.'
-    recipient_list = list(dict.fromkeys(recipients))
-    send_email(subject, msg, recipient_list)
-
-    return HttpResponseRedirect(reverse('claim-release-index'))
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-RELEASE')
-def claim_release_reject(request, _id):
-    claim = Claim.objects.get(claim_id=_id)
-    proposal = Proposal.objects.get(proposal_id=claim.proposal.proposal_id)
-    recipients = []
-
-    try:
-        approvers = ClaimRelease.objects.filter(
-            claim_id=_id, sequence__lt=ClaimRelease.objects.get(claim_id=_id, claim_approval_id=request.user.user_id).sequence)
-    except ClaimRelease.DoesNotExist:
-        pass
-
-    for i in approvers:
-        recipients.append(i.claim_approval_email)
-
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT claim_id, email FROM apps_claim INNER JOIN apps_user ON apps_claim.entry_by = apps_user.user_id WHERE claim_id = '" + str(_id) + "'")
-        entry_mail = cursor.fetchone()
-        if entry_mail:
-            recipients.append(entry_mail[1])
-
-        cursor.execute(
-            "SELECT claim_id, email FROM apps_claim INNER JOIN apps_user ON apps_claim.update_by = apps_user.user_id WHERE claim_id = '" + str(_id) + "'")
-        update_mail = cursor.fetchone()
-        if update_mail:
-            recipients.append(update_mail[1])
-
-    note = ClaimRelease.objects.get(
-        claim_id=_id, claim_approval_id=request.user.user_id)
-    note.reject_note = request.POST.get('reject_note')
-    note.save()
-
-    subject = 'Claim Rejected'
-    msg = 'Dear All,\n\nClaim No. ' + str(_id) + ' has been rejected.\n\nNote: ' + \
-        str(note.reject_note) + \
-        '\n\nClick the following link to see the claim.\n'
-
-    claim = Claim.objects.get(claim_id=_id)
-    claim.status = 'REJECTED'
-    claim.save()
-
-    sum_amount = Claim.objects.filter(
-        proposal_id=claim.proposal_id).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-    sum_add_amount = Claim.objects.filter(additional_proposal=claim.proposal_id).exclude(
-        status__in=['REJECTED', 'DRAFT']).aggregate(Sum('additional_amount'))
-
-    sum_amount2 = Claim.objects.filter(
-        proposal_id=claim.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(Sum('amount'))
-    sum_add_amount2 = Claim.objects.filter(additional_proposal=claim.additional_proposal).exclude(status__in=['REJECTED', 'DRAFT']).aggregate(
-        Sum('additional_amount'))
-
-    amount = sum_amount.get('amount__sum') if sum_amount.get(
-        'amount__sum') else 0
-    additional_amount = sum_add_amount.get(
-        'additional_amount__sum') if sum_add_amount.get('additional_amount__sum') else 0
-
-    amount2 = sum_amount2.get('amount__sum') if sum_amount2.get(
-        'amount__sum') else 0
-    additional_amount2 = sum_add_amount2.get('additional_amount__sum') if sum_add_amount2.get(
-        'additional_amount__sum') else 0
-
-    proposal.proposal_claim = amount + additional_amount
-    proposal.balance = proposal.total_cost - proposal.proposal_claim
-    proposal.save()
-
-    proposal2 = Proposal.objects.get(
-        proposal_id=claim.additional_proposal) if claim.additional_proposal else None
-    if proposal2:
-        proposal2.proposal_claim = amount2 + additional_amount2
-        proposal2.balance = proposal2.total_cost - proposal2.proposal_claim
-        proposal2.save()
-
-    msg += host.url + 'claim/view/reject/' + str(_id) + \
-        '\n\nThank you.'
-    recipient_list = list(dict.fromkeys(recipients))
-    send_email(subject, msg, recipient_list)
-
-    return HttpResponseRedirect(reverse('claim-release-index'))
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM')
-def claim_print(request, _id):
-    claim = Claim.objects.get(claim_id=_id)
-    claim_id = _id.replace('/', '-')
-
-    # Create a new PDF file with landscape orientation
-    filename = 'claim_' + claim_id + '.pdf'
-    pdf_file = canvas.Canvas(filename, pagesize=landscape(A4))
-
-    # Set the font and font size
-    pdf_file.setFont('Helvetica-Bold', 11)
-
-    # Add logo in the center of the page
-    logo_width = 60
-    logo_height = 60
-    page_width = landscape(A4)
-    logo_x = (page_width[0] - logo_width) / 2
-    logo_path = finders.find('img/logo.png')
-    if logo_path:
-        pdf_file.drawImage(
-            logo_path,
-            logo_x,
-            515,
-            width=logo_width,
-            height=logo_height,
-        )
-
-    # Add title in the center of page width
-    title = 'DEBIT NOTE'
-    title_width = pdf_file.stringWidth(title, 'Helvetica-Bold', 11)
-    title_x = (page_width[0] - title_width) / 2
-    pdf_file.setFont('Helvetica-Bold', 11)
-    pdf_file.drawString(title_x, 500, title)
-
-    # Write the claim details
-    y = 450
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Claim No.')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, str(claim.claim_id))
-    pdf_file.setFont('Helvetica-Bold', 8)
-    y -= 10
-    pdf_file.drawString(25, y, 'Claim Date')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, claim.claim_date.strftime('%d %b %Y'))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Proposal No.')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, str(claim.proposal.proposal_id))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Program Name')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, str(claim.proposal.program_name))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Invoice No.')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, str(claim.invoice))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Invoice Date')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, claim.invoice_date.strftime('%d %b %Y'))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Due Date')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, claim.due_date.strftime('%d %b %Y'))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Amount')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, '{:,}'.format(claim.total_claim))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Additional Proposal')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, str(
-        claim.additional_proposal if claim.additional_proposal else '-'))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Additional Amount')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, '{:,}'.format(
-        claim.additional_amount) if claim.additional_amount else '-')
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Tax')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, '{:,}'.format(claim.tax))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Total Amount')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, '{:,}'.format(claim.total))
-    y -= 10
-    pdf_file.setFont('Helvetica-Bold', 8)
-    pdf_file.drawString(25, y, 'Remarks')
-    pdf_file.drawString(150, y, ': ')
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.drawString(160, y, str(claim.remarks))
-
-    y -= 50
-    col_width = (page_width[0] - 50) / 11
-    approver = ClaimRelease.objects.filter(
-        claim_id=_id, claim_approval_status='Y', printed=True).order_by('sequence')
-    verificator = ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='verificator', printed=True).aggregate(id=Count(
-        'id')) if ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='verificator', printed=True).exists() else 0
-    area_approver = ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='area_approver', printed=True).aggregate(id=Count(
-        'id')) if ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='area_approver', printed=True).exists() else 0
-    checker = ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='checker', printed=True).aggregate(id=Count(
-        'id')) if ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='checker', printed=True).exists() else 0
-    ho_approver = ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='ho_approver', printed=True).aggregate(id=Count(
-        'id')) if ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='ho_approver', printed=True).exists() else 0
-    validator = ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='validator', printed=True).aggregate(id=Count(
-        'id')) if ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='validator', printed=True).exists() else 0
-    finalizer = ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='finalizer', printed=True).aggregate(id=Count(
-        'id')) if ClaimRelease.objects.filter(claim_id=_id, claim_approval_status='Y', as_approved='finalizer', printed=True).exists() else 0
-
-    verificator_count = verificator['id'] if verificator else 0
-    area_approver_count = area_approver['id'] if area_approver else 0
-    checker_count = checker['id'] if checker else 0
-    ho_approver_count = ho_approver['id'] if ho_approver else 0
-    validator_count = validator['id'] if validator else 0
-    finalizer_count = finalizer['id'] if finalizer else 0
-
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.rect(25, y-5, col_width, 15, stroke=True)
-    title = 'Prepared By'
-    title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-    title_x = 25 + (col_width - title_width) / 2
-    pdf_file.drawString(title_x, y, title)
-
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.rect(25 + col_width, y-5,
-                  col_width * verificator_count, 15, stroke=True)
-    title = 'Verified By' if verificator_count > 0 else ''
-    title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-    title_x = 25 + col_width + \
-        ((col_width * verificator_count) - title_width) / 2
-    pdf_file.drawString(title_x, y, title)
-
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.rect(25 + (col_width * (verificator_count + 1)), y-5,
-                  col_width * area_approver_count, 15, stroke=True)
-    title = 'Approved By' if area_approver_count > 0 else ''
-    title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-    title_x = 25 + (col_width * (verificator_count + 1)) + \
-        ((col_width * area_approver_count) - title_width) / 2
-    pdf_file.drawString(title_x, y, title)
-
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.rect(25 + (col_width * (verificator_count + area_approver_count + 1)),
-                  y-5, col_width * checker_count, 15, stroke=True)
-    title = 'Checked By' if checker_count > 0 else ''
-    title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-    title_x = 25 + (col_width * (verificator_count + area_approver_count + 1)
-                    ) + ((col_width * checker_count) - title_width) / 2
-    pdf_file.drawString(title_x, y, title)
-
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.rect(25 + (col_width * (verificator_count + area_approver_count +
-                  checker_count + 1)), y-5, col_width * ho_approver_count, 15, stroke=True)
-    title = 'Approved By' if ho_approver_count > 0 else ''
-    title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-    title_x = 25 + (col_width * (verificator_count + area_approver_count +
-                    checker_count + 1)) + ((col_width * ho_approver_count) - title_width) / 2
-    pdf_file.drawString(title_x, y, title)
-
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.rect(25 + (col_width * (verificator_count + area_approver_count + checker_count +
-                  ho_approver_count + 1)), y-5, col_width * validator_count, 15, stroke=True)
-    title = 'Validated By' if validator_count > 0 else ''
-    title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-    title_x = 25 + (col_width * (verificator_count + area_approver_count + checker_count +
-                    ho_approver_count + 1)) + ((col_width * validator_count) - title_width) / 2
-    pdf_file.drawString(title_x, y, title)
-
-    pdf_file.setFont('Helvetica', 8)
-    pdf_file.rect(25 + (col_width * (verificator_count + area_approver_count + checker_count +
-                  ho_approver_count + validator_count + 1)), y-5, col_width * finalizer_count, 15, stroke=True)
-    title = 'Approved By' if finalizer_count > 0 else ''
-    title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-    title_x = 25 + (col_width * (verificator_count + area_approver_count + checker_count +
-                    ho_approver_count + validator_count + 1)) + ((col_width * finalizer_count) - title_width) / 2
-    pdf_file.drawString(title_x, y, title)
-
-    pdf_file.rect(25, y - 55, col_width, 50, stroke=True)
-    sign_path = User.objects.get(user_id=claim.entry_by).signature.path if User.objects.get(
-        user_id=claim.entry_by).signature else ''
-    if sign_path:
-        pdf_file.drawImage(sign_path, 30, y - 50,
-                           width=col_width - 10, height=40)
-    else:
-        pass
-    pdf_file.rect(25, y - 70, col_width, 15, stroke=True)
-    title = claim.entry_pos
-    title_width = pdf_file.stringWidth(title, "Helvetica-Bold", 8)
-    title_x = 25 + (col_width - title_width) / 2
-    pdf_file.setFont("Helvetica-Bold", 8)
-    pdf_file.drawString(title_x, y - 65, title)
-    pdf_file.rect(25, y - 85, col_width, 15, stroke=True)
-    pdf_file.setFont("Helvetica", 8)
-    title = 'Date: ' + claim.entry_date.strftime('%d/%m/%Y')
-    title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-    title_x = 25 + (col_width - title_width) / 2
-    pdf_file.drawString(title_x, y - 80, title)
-
-    for i in range(1, approver.count() + 1):
-        pdf_file.rect(25 + (col_width * i), y - 55, col_width, 50, stroke=True)
-        if approver:
-            sign_path = User.objects.get(user_id=approver[i - 1].claim_approval_id).signature.path if User.objects.get(
-                user_id=approver[i - 1].claim_approval_id).signature else ''
-            if sign_path:
-                pdf_file.drawImage(sign_path, 30 + (col_width * i), y - 50,
-                                   width=col_width - 10, height=40)
-            else:
-                pass
-            pdf_file.rect(25 + (col_width * i), y - 70,
-                          col_width, 15, stroke=True)
-            title = approver[i - 1].claim_approval_position
-            title_width = pdf_file.stringWidth(title, "Helvetica-Bold", 8)
-            title_x = 25 + (col_width * i) + (col_width - title_width) / 2
-            pdf_file.setFont("Helvetica-Bold", 8)
-            pdf_file.drawString(title_x, y - 65, title)
-            pdf_file.rect(25 + (col_width * i), y - 85,
-                          col_width, 15, stroke=True)
-            pdf_file.setFont("Helvetica", 8)
-            title = 'Date: ' + \
-                approver[i - 1].claim_approval_date.strftime('%d/%m/%Y')
-            title_width = pdf_file.stringWidth(title, "Helvetica", 8)
-            title_x = 25 + (col_width * i) + (col_width - title_width) / 2
-            pdf_file.drawString(title_x, y - 80, title)
-        else:
-            pass
-
-    pdf_file.save()
-
-    return FileResponse(open(filename, 'rb'), content_type='application/pdf')
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-ARCHIVE')
-def claim_archive_index(request):
-    rejects = Claim.objects.filter(status='REJECTED', area__in=AreaUser.objects.filter(
-        user_id=request.user.user_id).values_list('area_id', flat=True)).order_by('-claim_id').all
-
-    context = {
-        'rejects': rejects,
-        'notif': order_notification(request),
-        'segment': 'claim_archive',
-        'group_segment': 'claim',
-        'crud': 'index',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list(
-            'menu_id', flat=True),
-        'btn': Auth.objects.get(
-            user_id=request.user.user_id, menu_id='CLAIM-ARCHIVE') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/claim_archive.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-APPROVAL')
-def claim_matrix_index(request):
-    areas = AreaSales.objects.all()
-
-    context = {
-        'data': areas,
-        'notif': order_notification(request),
-        'segment': 'claim_matrix',
-        'group_segment': 'approval',
-        'crud': 'index',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='CLAIM-APPROVAL') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/claim_matrix_index.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-APPROVAL')
-def claim_matrix_view(request, _id, _channel):
-    area = AreaSales.objects.get(area_id=_id)
-    channels = AreaChannelDetail.objects.filter(area_id=_id, status=1)
-    approvers = ClaimMatrix.objects.filter(area_id=_id, channel_id=_channel)
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT user_id, username, position_name, q_claimmatrix.approver_id FROM apps_user INNER JOIN apps_position ON apps_user.position_id = apps_position.position_id LEFT JOIN (SELECT * FROM apps_claimmatrix WHERE area_id = '" + str(_id) + "' AND channel_id = '" + str(_channel) + "') AS q_claimmatrix ON apps_user.user_id = q_claimmatrix.approver_id WHERE q_claimmatrix.approver_id IS NULL")
-        users = cursor.fetchall()
-
-    if request.POST:
-        check = request.POST.getlist('checks[]')
-        for i in users:
-            if str(i[0]) in check:
-                try:
-                    approver = ClaimMatrix(
-                        area_id=_id, channel_id=_channel, approver_id=i[0])
-                    approver.save()
-                except IntegrityError:
-                    continue
-            else:
-                ClaimMatrix.objects.filter(
-                    area_id=_id, channel_id=_channel, approver_id=i[0]).delete()
-
-        return HttpResponseRedirect(reverse('claim-matrix-view', args=[_id, _channel]))
-
-    context = {
-        'data': area,
-        'channels': channels,
-        'users': users,
-        'approvers': approvers,
-        'channel': _channel,
-        'notif': order_notification(request),
-        'segment': 'claim_matrix',
-        'group_segment': 'approval',
-        'tab': 'auth',
-        'crud': 'view',
-        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
-        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='CLAIM-APPROVAL') if not request.user.is_superuser else Auth.objects.all(),
-    }
-    return render(request, 'home/claim_matrix_view.html', context)
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-APPROVAL')
-def claim_matrix_update(request, _id, _channel, _approver):
-    approvers = ClaimMatrix.objects.get(
-        area=_id, channel_id=_channel, approver_id=_approver)
-
-    if request.POST:
-        approvers.sequence = int(request.POST.get('sequence'))
-        approvers.limit = int(request.POST.get('limit'))
-        approvers.return_to = True if request.POST.get('return') else False
-        approvers.approve = True if request.POST.get('approve') else False
-        approvers.revise = True if request.POST.get('revise') else False
-        approvers.returned = True if request.POST.get('returned') else False
-        approvers.reject = True if request.POST.get('reject') else False
-        approvers.notif = True if request.POST.get('notif') else False
-        approvers.printed = True if request.POST.get('printed') else False
-        approvers.as_approved = request.POST.get('as_approved')
-        approvers.save()
-
-        return HttpResponseRedirect(reverse('claim-matrix-view', args=[_id, _channel]))
-
-    return render(request, 'home/claim_matrix_view.html')
-
-
-@login_required(login_url='/login/')
-@role_required(allowed_roles='CLAIM-APPROVAL')
-def claim_matrix_delete(request, _id, _channel, _arg):
-    approvers = ClaimMatrix.objects.get(
-        area=_id, channel_id=_channel, approver_id=_arg)
-    approvers.delete()
-
-    return HttpResponseRedirect(reverse('claim-matrix-view', args=[_id, _channel]))
 
 
 @login_required(login_url='/login/')
@@ -8532,3 +7548,244 @@ def order_checklist(request, _id):
     pdf_file.save()
 
     return FileResponse(open(filename, 'rb'), content_type='application/pdf')
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='JADWAL')
+def jadwal_index(request):
+    areas = AreaUser.objects.filter(user_id=request.user.user_id)
+    area_ids = areas.values_list('area_id', flat=True)
+
+    context = {
+        'notif': order_notification(request),
+        'segment': 'jadwal',
+        'group_segment': 'transaction',
+        'crud': 'index',
+        'role': Auth.objects.filter(user_id=request.user.user_id).values_list('menu_id', flat=True),
+        'btn': Auth.objects.get(user_id=request.user.user_id, menu_id='JADWAL') if not request.user.is_superuser else Auth.objects.all(),
+        'areas': AreaSales.objects.filter(area_id__in=area_ids),
+    }
+    return render(request, 'home/jadwal_index.html', context)
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='JADWAL')
+def jadwal_events(request):
+    start = request.GET.get('start', '').split('T')[0]
+    end = request.GET.get('end', '').split('T')[0]
+    branch = request.GET.get('branch', 'all')
+    status = request.GET.get('status', 'all')
+    driver = request.GET.get('driver', '').strip()
+
+    areas = AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True)
+    orders = Order.objects.filter(
+        delivery_date__date__gte=start,
+        delivery_date__date__lte=end,
+        regional_id__in=areas
+    ).exclude(order_status__in=['PENDING', 'DRAFT', 'BATAL'])
+
+    if branch != 'all':
+        orders = orders.filter(regional_id=branch)
+    if status != 'all':
+        orders = orders.filter(schedule_status=status)
+    if driver:
+        orders = orders.filter(driver__icontains=driver)
+
+    schedule_status_colors = {
+        'UNSCHEDULED': '#6c757d',
+        'SCHEDULED': '#ffc107',
+        'COOKING': '#fd7e14',
+        'PACKING': '#17a2b8',
+        'READY': '#0dcaf0',
+        'ON_DELIVERY': '#0d6efd',
+        'COMPLETED': '#28a745',
+        'CANCELLED': '#dc3545',
+    }
+
+    events = []
+    for order in orders.select_related('regional'):
+        if not order.regional:
+            continue
+        try:
+            dt = str(order.departure_time or '').strip()
+            event_hour, event_min = 0, 0
+            if dt:
+                try:
+                    parts = dt.split(':')
+                    event_hour = int(parts[0])
+                    event_min = int(parts[1]) if len(parts) > 1 else 0
+                except (ValueError, IndexError):
+                    event_hour, event_min = 0, 0
+            start_str = order.delivery_date.strftime('%Y-%m-%d') + 'T{:02d}:{:02d}:00'.format(event_hour, event_min)
+
+            packages = OrderPackage.objects.filter(order=order).select_related('category', 'package', 'package__goat_type')
+            product_list = []
+            description_parts = []
+            quantity_total = 0
+            goat_types = []
+            goat_type_names = []
+            for pkg in packages:
+                category_clean = re.sub(r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
+                product_name = f"{category_clean} - {pkg.package.package_name}".strip(' -')
+                product_list.append(product_name)
+                quantity_total += pkg.quantity or 1
+                if pkg.type and pkg.type not in goat_types:
+                    goat_types.append(pkg.type)
+                if pkg.package.goat_type and pkg.package.goat_type.goat_type_name not in goat_type_names:
+                    goat_type_names.append(pkg.package.goat_type.goat_type_name)
+
+                desc_items = []
+                for cuisine in [pkg.main_cuisine, pkg.sub_cuisine, pkg.side_cuisine1, pkg.side_cuisine2, pkg.side_cuisine3, pkg.side_cuisine4, pkg.side_cuisine5]:
+                    if cuisine:
+                        desc_items.append(cuisine)
+                if pkg.box_type:
+                    desc_items.append(f"Box ({pkg.box_type})")
+                if pkg.upgrade:
+                    desc_items.append(f"Up: {pkg.upgrade}")
+                if pkg.beverage:
+                    desc_items.append(f"Minuman: {pkg.beverage}")
+                if pkg.souvenir:
+                    desc_items.append(f"Souvenir: {pkg.souvenir}")
+                if desc_items:
+                    description_parts.append(', '.join(desc_items))
+
+            events.append({
+                'id': order.order_id,
+                'title': order.customer_name,
+                'start': start_str,
+                'color': schedule_status_colors.get(order.schedule_status or 'UNSCHEDULED', '#6c757d'),
+                'extendedProps': {
+                    'order_id': order.order_id,
+                    'customer_name': order.customer_name,
+                    'area_name': order.regional.area_name,
+                    'status': order.order_status,
+                    'total_order': str(order.total_order),
+                    'cs': order.cs or '-',
+                    'time_arrival': order.time_arrival or '',
+                    'customer_address': order.customer_address or '',
+                    'driver': order.driver or '',
+                    'departure_time': order.departure_time or '00:00',
+                    'schedule_status': order.schedule_status or 'UNSCHEDULED',
+                    'product_name': ' | '.join(product_list) if product_list else '-',
+                    'description': ' | '.join(description_parts) if description_parts else '-',
+                    'quantity': quantity_total,
+                    'goat_type': ' - '.join(f"{t} - {n}" for t, n in zip(goat_types, goat_type_names)) if goat_types and goat_type_names else (', '.join(goat_types) if goat_types else '-'),
+                    'leftover_food': order.orderleftoverfood_set.values_list('leftover_food', flat=True).first() or '',
+                }
+            })
+        except Exception as e:
+            print(f"ERROR processing order {order.order_id}: {e}")
+            continue
+
+    return JsonResponse(events, safe=False)
+
+
+@login_required(login_url='/login/')
+def jadwal_save(request, order_id):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        if not request.user.is_superuser:
+            auth = Auth.objects.filter(user_id=request.user.user_id, menu_id='JADWAL').first()
+            if not auth or not auth.edit:
+                return JsonResponse({'success': False, 'error': 'Tidak memiliki akses edit'}, status=403)
+
+        data = json.loads(request.body)
+        order = Order.objects.get(order_id=order_id)
+        driver = data.get('driver', '').strip()
+        departure_time = data.get('departure_time', '00:00')
+        schedule_status = data.get('schedule_status', 'UNSCHEDULED')
+
+        order.driver = driver
+        order.departure_time = departure_time
+        order.schedule_status = schedule_status
+        order.save()
+
+        leftover_food = data.get('leftover_food', '')
+        if leftover_food is not None:
+            first_package = OrderPackage.objects.filter(order=order).first()
+            if first_package:
+                leftover_obj, created = OrderLeftoverFood.objects.get_or_create(
+                    order=order,
+                    package=first_package.package,
+                    defaults={'leftover_food': leftover_food, 'entry_date': timezone.now(), 'entry_by': request.user.username}
+                )
+                if not created:
+                    leftover_obj.leftover_food = leftover_food
+                    leftover_obj.update_by = request.user.username
+                    leftover_obj.save()
+
+        return JsonResponse({'success': True})
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required(login_url='/login/')
+def jadwal_reminders(request):
+    today = date.today()
+    now = dt.datetime.now()
+    current_time = now.strftime('%H:%M')
+
+    areas = AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True)
+    active_orders = Order.objects.filter(
+        delivery_date__date=today,
+        regional_id__in=areas
+    ).exclude(order_status__in=['PENDING', 'DRAFT', 'BATAL'])
+
+    reminders = []
+
+    for order in active_orders:
+        order_id = order.order_id
+        cust = order.customer_name or '-'
+        departure = str(order.departure_time or '00:00')
+        status = order.schedule_status or 'UNSCHEDULED'
+
+        if not order.driver or not str(order.driver).strip():
+            reminders.append({
+                'type': 'NO_DRIVER',
+                'message': f'Driver belum ditentukan untuk pesanan {order_id} ({cust})',
+                'order_id': order_id,
+            })
+
+        if status == 'UNSCHEDULED':
+            reminders.append({
+                'type': 'UNSCHEDULED',
+                'message': f'Pesanan {order_id} ({cust}) belum dijadwalkan',
+                'order_id': order_id,
+            })
+
+        if status == 'PACKING' and departure < current_time:
+            reminders.append({
+                'type': 'PACKING_OVERDUE',
+                'message': f'Packing pesanan {order_id} ({cust}) belum selesai',
+                'order_id': order_id,
+            })
+
+        if status not in ('ON_DELIVERY', 'COMPLETED', 'CANCELLED') and departure < current_time:
+            reminders.append({
+                'type': 'DELIVERY_OVERDUE',
+                'message': f'Pengiriman pesanan {order_id} ({cust}) terlambat',
+                'order_id': order_id,
+            })
+
+        if status == 'SCHEDULED' and departure < current_time:
+            reminders.append({
+                'type': 'SCHEDULED_OVERDUE',
+                'message': f'Pesanan {order_id} ({cust}) masih Scheduled tetapi jam sudah lewat',
+                'order_id': order_id,
+            })
+
+        if status not in ('UNSCHEDULED', 'COMPLETED', 'CANCELLED') and departure > current_time:
+            dep_h, dep_m = map(int, departure.split(':'))
+            cur_h, cur_m = map(int, current_time.split(':'))
+            diff_min = (dep_h * 60 + dep_m) - (cur_h * 60 + cur_m)
+            if diff_min <= 60:
+                reminders.append({
+                    'type': 'DEPARTURE_SOON',
+                    'message': f'Pesanan {order_id} ({cust}) berangkat dalam {diff_min} menit',
+                    'order_id': order_id,
+                })
+
+    return JsonResponse({'reminders': reminders, 'count': len(reminders)})

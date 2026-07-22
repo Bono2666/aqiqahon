@@ -434,7 +434,7 @@
                                         <h6 class="mb-0 text-xs">{{ item.child_birth|date:'d F Y' }}</h6>
                                     </td>
                                     <td>
-                                        <h6 class="mb-0 text-xs">{% if item.child_sex == 1 %}Laki-laki{% else %}Perempuan{% endif %}</h6>
+                                        <h6 class="mb-0 text-xs">{% if item.child_sex == '1' %}Laki-laki{% else %}Perempuan{% endif %}</h6>
                                     </td>
                                     <td>
                                         <h6 class="mb-0 text-xs">{{ item.child_father }}</h6>
@@ -1193,7 +1193,7 @@
                         </div>
                     </div>
                     <div class="modal-footer border-0">
-                        <a href="{% url 'order-view' data.order_id '0' '0' '0' '0' %}" role="button" class="btn btn-sm bg-gradient-dark">Batal</a>
+                        <button type="button" class="btn btn-sm bg-gradient-dark" data-bs-dismiss="modal">Batal</button>
                         <button type="button" id="btn-edit-paket"
                             class="btn btn-sm bg-gradient-warning text-white {% if not btn.edit and not request.user.is_superuser %}disabled{% endif %} {% if status == 'BATAL' or status == 'SELESAI' %}disabled{% else %}{% if crud == 'update' %}disabled{% endif %}{% endif %} {% if archive %}disabled{% endif %}">Simpan</button>
                     </div>

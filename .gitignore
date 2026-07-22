@@ -87,3 +87,4 @@ settings.py
 
 .env
 db.sqlite3
+testsprite_tests/tmp/config.json

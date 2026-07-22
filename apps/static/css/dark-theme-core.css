@@ -185,4 +185,21 @@ body.dark-page .btn-outline-dark {
 body.dark-page .modal-content {
   background-color: #404B69;
 }
+body.dark-page .modal-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* FullCalendar: align events to top */
+.fc .fc-daygrid-day-frame {
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+}
+.fc .fc-daygrid-day-events {
+  flex: 1 1 0% !important;
+  justify-content: flex-start !important;
+  align-content: flex-start !important;
+}
+.fc .fc-daygrid-day-bottom {
+  display: none !important;
+}
 /*# sourceMappingURL=dark-theme-core.css.map */

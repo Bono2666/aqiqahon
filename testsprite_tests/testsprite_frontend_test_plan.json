@@ -1,0 +1,1058 @@
+[
+  {
+    "id": "TC001",
+    "title": "Sign in and reach the dashboard",
+    "description": "This verifies that a valid internal user can sign in and land on the dashboard with operational information available.",
+    "category": "User Login",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the dashboard is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify operational counters are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "Keep access to authenticated pages from the dashboard",
+    "description": "This verifies a logged-in user can access the main authenticated areas used in daily operations.",
+    "category": "Dashboard and Authentication",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the daily schedule list"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the reminders page"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the goat type master data page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the authenticated management pages are accessible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC003",
+    "title": "Reject invalid login credentials",
+    "description": "This verifies that entering incorrect credentials keeps the user out and shows a login error message.",
+    "category": "User Login",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with invalid-user"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with invalid-password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an invalid credentials message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the dashboard is not displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Update a schedule status and driver assignment",
+    "description": "This verifies that a user can change an order's status or driver and save the updated schedule.",
+    "category": "Daily Order Schedule",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open the daily schedule list"
+      },
+      {
+        "type": "action",
+        "description": "Open a schedule for editing"
+      },
+      {
+        "type": "action",
+        "description": "Select a new status"
+      },
+      {
+        "type": "action",
+        "description": "Select a driver"
+      },
+      {
+        "type": "action",
+        "description": "Save the schedule"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated schedule is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC005",
+    "title": "Open a schedule and save updates",
+    "description": "This verifies a user can open a schedule row, change its status or driver assignment, and save the update.",
+    "category": "Order Schedule List",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /jadwal/"
+      },
+      {
+        "type": "action",
+        "description": "Click a schedule row to open its details"
+      },
+      {
+        "type": "action",
+        "description": "Change the schedule status"
+      },
+      {
+        "type": "action",
+        "description": "Assign a driver to the schedule"
+      },
+      {
+        "type": "action",
+        "description": "Save the schedule update"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated schedule details are shown"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the saved change is reflected in the schedule"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC006",
+    "title": "Open today's schedule list and review an order",
+    "description": "This verifies that an authenticated user can open the daily schedule list and inspect an order's details.",
+    "category": "Daily Order Schedule",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open the daily schedule list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify today's schedule list is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify schedule row details are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC007",
+    "title": "View today’s schedule list and find an order",
+    "description": "This verifies the default daily schedule list loads and a user can search for a specific order.",
+    "category": "Order Schedule List",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /jadwal/"
+      },
+      {
+        "type": "action",
+        "description": "Search for a schedule using a keyword"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify today’s schedule list is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify matching schedule results are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC008",
+    "title": "Load dashboard counters and notification badge",
+    "description": "This verifies that the authenticated dashboard shows the daily operational counts and the sidebar notification badge.",
+    "category": "Dashboard View",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dashboard/"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify today's orders summary is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the sidebar notification badge is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC009",
+    "title": "Find an order using schedule filters",
+    "description": "This verifies that a user can search and filter the schedule list to narrow results to a specific order.",
+    "category": "Daily Order Schedule",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open the daily schedule list"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a delivery date filter"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a customer filter"
+      },
+      {
+        "type": "action",
+        "description": "Select a status filter"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the schedule list is filtered to matching orders"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC010",
+    "title": "Filter schedules by operational fields",
+    "description": "This verifies a user can narrow the schedule list using the available business filters.",
+    "category": "Order Schedule List",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /jadwal/"
+      },
+      {
+        "type": "action",
+        "description": "Select a delivery date filter value"
+      },
+      {
+        "type": "action",
+        "description": "Select a customer filter value"
+      },
+      {
+        "type": "action",
+        "description": "Select a driver filter value"
+      },
+      {
+        "type": "action",
+        "description": "Select a status filter value"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the schedule list is filtered"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the remaining results match the selected criteria"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC011",
+    "title": "Review all operational order counters on the dashboard",
+    "description": "This verifies that the authenticated dashboard shows counts for each order status used by operations staff.",
+    "category": "Dashboard View",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dashboard/"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify unscheduled orders are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify cooking orders are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify packing orders are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify ready orders are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify on delivery orders are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify completed orders are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC012",
+    "title": "Review reminders and open the related schedule",
+    "description": "This verifies a user can inspect reminders and navigate to the linked schedule from a reminder item.",
+    "category": "Schedule Reminders",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /jadwal/reminders/"
+      },
+      {
+        "type": "action",
+        "description": "Open a reminder item"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the related schedule"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify reminder items are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the related schedule page is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC013",
+    "title": "Open overdue reminders from the reminder list",
+    "description": "This verifies that a user can review reminders and open a related schedule from the reminders page.",
+    "category": "Reminder System",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open reminders"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify overdue schedule reminders are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a related schedule opens from a reminder"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC014",
+    "title": "View missing driver and incomplete packing reminders",
+    "description": "This verifies that the reminders page shows the operational exception types staff need to resolve.",
+    "category": "Reminder System",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open reminders"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify missing driver reminders are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify incomplete packing reminders are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC015",
+    "title": "Add a new goat type and see it in the list",
+    "description": "This verifies a user can create a new goat type record and return to the list to confirm it appears.",
+    "category": "Goat Type Master CRUD",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /master/goat-type/"
+      },
+      {
+        "type": "action",
+        "description": "Click the add goat type action"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the goat type code field with a new unique value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the goat type name field with a new unique value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the display order field with a valid number"
+      },
+      {
+        "type": "action",
+        "description": "Set the active status to enabled"
+      },
+      {
+        "type": "action",
+        "description": "Save the new goat type"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new goat type appears in the list"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC016",
+    "title": "View and update a goat type",
+    "description": "This verifies a user can open an existing goat type, edit it, and see the updated record afterward.",
+    "category": "Goat Type Master CRUD",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /master/goat-type/"
+      },
+      {
+        "type": "action",
+        "description": "Open a goat type detail view"
+      },
+      {
+        "type": "action",
+        "description": "Return to the goat type list"
+      },
+      {
+        "type": "action",
+        "description": "Open the edit form for the same goat type"
+      },
+      {
+        "type": "action",
+        "description": "Change the goat type name"
+      },
+      {
+        "type": "action",
+        "description": "Save the goat type update"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated goat type is shown in the list"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC017",
+    "title": "View and edit an existing goat type",
+    "description": "This verifies that a user can open an existing goat type, update it, and see the saved details.",
+    "category": "Goat Type Master Data",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open goat type master data"
+      },
+      {
+        "type": "action",
+        "description": "Open a goat type details page"
+      },
+      {
+        "type": "action",
+        "description": "Click the action to edit the goat type"
+      },
+      {
+        "type": "action",
+        "description": "Update the goat type information"
+      },
+      {
+        "type": "action",
+        "description": "Save the goat type changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated goat type details are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC018",
+    "title": "Browse calendar schedules across months",
+    "description": "This verifies a user can view schedules in calendar form and move between months.",
+    "category": "Schedule Calendar View",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /jadwal/events/"
+      },
+      {
+        "type": "action",
+        "description": "Move to another month"
+      },
+      {
+        "type": "action",
+        "description": "Move back to the previous month"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the calendar view is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify schedule events are displayed on the calendar"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC019",
+    "title": "Open calendar events and move between months",
+    "description": "This verifies that a user can use the calendar view to browse months and inspect an event's schedule details.",
+    "category": "Calendar Schedule View",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user ID field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open the calendar schedule view"
+      },
+      {
+        "type": "action",
+        "description": "Move to another month"
+      },
+      {
+        "type": "action",
+        "description": "Open a calendar event"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify calendar event schedule details are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC020",
+    "title": "Delete a goat type with confirmation",
+    "description": "This verifies a user can remove an existing goat type after confirming the delete action.",
+    "category": "Goat Type Master CRUD",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /master/goat-type/"
+      },
+      {
+        "type": "action",
+        "description": "Open the delete flow for a goat type"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the deletion"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the goat type is removed from the list"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC021",
+    "title": "Open a calendar event to inspect its schedule",
+    "description": "This verifies a user can select a calendar event and view the associated schedule details.",
+    "category": "Schedule Calendar View",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /jadwal/events/"
+      },
+      {
+        "type": "action",
+        "description": "Click a calendar event"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the schedule details for the selected event are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC022",
+    "title": "Show an empty result when no schedules match",
+    "description": "This verifies the schedule list handles a valid search or filter that returns no matching records.",
+    "category": "Order Schedule List",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /jadwal/"
+      },
+      {
+        "type": "action",
+        "description": "Search for a schedule using a value that matches no records"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an empty results state is displayed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC023",
+    "title": "Reject an empty goat type field when saving",
+    "description": "This verifies required goat type fields prevent saving an incomplete master record.",
+    "category": "Goat Type Master CRUD",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /master/goat-type/"
+      },
+      {
+        "type": "action",
+        "description": "Click the add goat type action"
+      },
+      {
+        "type": "action",
+        "description": "Leave a required field empty and submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a form validation error is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the goat type is not created"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC024",
+    "title": "Handle an inactive goat type in the list",
+    "description": "This verifies a goat type can be shown as inactive and remains visible in the master list as a valid record.",
+    "category": "Goat Type Master CRUD",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login/"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the user id field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /master/goat-type/"
+      },
+      {
+        "type": "action",
+        "description": "Open the add goat type action"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the goat type code field with a new unique value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the goat type name field with a new unique value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the display order field with a valid number"
+      },
+      {
+        "type": "action",
+        "description": "Set the active status to disabled"
+      },
+      {
+        "type": "action",
+        "description": "Save the new goat type"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the inactive goat type appears in the list"
+      }
+    ],
+    "priority": "Low"
+  }
+]

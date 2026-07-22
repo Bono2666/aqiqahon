@@ -1,0 +1,664 @@
+{% extends 'layouts/base.html' %}
+{% load my_filter %}
+
+{% block title %} Jadwal Pesanan {% endblock title %}
+
+{% block stylesheets %}
+<style>
+    .fc-theme-standard .fc-scrollgrid {
+        border: 1px solid #dee2e6;
+    }
+    .fc-theme-standard td, .fc-theme-standard th {
+        border: 1px solid #dee2e6;
+    }
+    .fc-day-today {
+        background: rgba(255, 140, 66, 0.08) !important;
+    }
+    .fc .fc-daygrid-day-frame {
+        min-height: auto !important;
+    }
+    .fc-event {
+        cursor: pointer;
+        border: none;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin-bottom: 1px;
+    }
+    .fc-event-title {
+        display: block !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        max-width: 15ch !important;
+    }
+    .fc-daygrid-event {
+        white-space: normal !important;
+    }
+    .fc-toolbar-title {
+        font-size: 1.1rem !important;
+        font-weight: 600;
+    }
+    .fc-button-active {
+        background-color: #ff8c42 !important;
+        border-color: #ff8c42 !important;
+    }
+    .fc-button:hover {
+        background-color: #ff8c42 !important;
+        border-color: #ff8c42 !important;
+    }
+    .fc-button {
+        background-color: #fff !important;
+        border-color: #dee2e6 !important;
+        color: #344767 !important;
+        font-size: 0.8rem !important;
+        padding: 4px 8px !important;
+    }
+    .fc-button:not(:disabled).fc-button-active,
+    .fc-button:not(:disabled):active {
+        background-color: #ff8c42 !important;
+        border-color: #ff8c42 !important;
+    }
+    .fc-today-button {
+        background-color: #ff8c42 !important;
+        border-color: #ff8c42 !important;
+        color: #fff !important;
+    }
+    .fc-today-button:disabled {
+        background-color: #ffc107 !important;
+        border-color: #ffc107 !important;
+        opacity: 0.6;
+    }
+    /* Dark mode */
+    body.dark-page .fc .fc-col-header-cell,
+    body.dark-page .fc .fc-daygrid-day-number,
+    body.dark-page .fc .fc-toolbar-title,
+    body.dark-page .fc .fc-button {
+        color: #ffffff !important;
+    }
+    body.dark-page .fc .fc-col-header-cell {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+    body.dark-page .fc .fc-col-header-cell-cushion {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    body.dark-page .fc .fc-theme-standard td,
+    body.dark-page .fc .fc-theme-standard th,
+    body.dark-page .fc .fc-scrollgrid,
+    body.dark-page .fc .fc-scrollgrid td,
+    body.dark-page .fc .fc-scrollgrid th {
+        border-color: rgba(255, 255, 255, 0.2) !important;
+    }
+    body.dark-page .fc .fc-scrollgrid-border-top,
+    body.dark-page .fc .fc-scrollgrid-border-left {
+        border-color: rgba(255, 255, 255, 0.2) !important;
+    }
+    body.dark-page .fc .fc-scrollgrid {
+        border-color: rgba(255, 255, 255, 0.2) !important;
+    }
+    body.dark-page .fc .fc-button {
+        background-color: #404B69 !important;
+        border-color: rgba(85, 119, 154, 0.27) !important;
+    }
+    body.dark-page .fc .fc-button-active,
+    body.dark-page .fc .fc-button:not(:disabled).fc-button-active,
+    body.dark-page .fc .fc-button:not(:disabled):active {
+        background-color: #ff8c42 !important;
+        border-color: #ff8c42 !important;
+    }
+    body.dark-page .fc .fc-today-button {
+        background-color: #ff8c42 !important;
+        border-color: #ff8c42 !important;
+        color: #fff !important;
+    }
+    body.dark-page .fc .fc-today-button:disabled {
+        background-color: #ffc107 !important;
+        border-color: #ffc107 !important;
+        opacity: 0.6;
+    }
+    body.dark-page .fc .fc-day-today {
+        background: rgba(255, 140, 66, 0.15) !important;
+    }
+    body.dark-page .fc .fc-event {
+        color: #fff !important;
+    }
+    body.dark-page .fc .fc-more-link {
+        color: #ffffff !important;
+    }
+    body.dark-page .card {
+        background-color: #404B69 !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    }
+    body.dark-page #filter-branch,
+    body.dark-page #filter-status {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg fill='none'%3E%3Cpath d='M3.87 6.49l-1.77 1.77 9.9 9.9 9.9-9.9-1.77-1.77-8.13 8.13-8.13-8.13z' fill='%23F7F7F7'%3E%3C/path%3E%3C/g%3E%3C/svg%3E") !important;
+        background-repeat: no-repeat !important;
+        background-position: right 0.5rem center !important;
+        background-size: 1rem !important;
+    }
+    body.dark-page #modal-detail .btn-close {
+        filter: brightness(0) invert(1) !important;
+        opacity: 0.8 !important;
+    }
+    body.dark-page #modal-detail .btn-close:hover {
+        opacity: 1 !important;
+    }
+    #modal-detail .modal-header {
+        background-color: #1e2a3a;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #modal-detail .modal-title,
+    #modal-detail .badge {
+        color: #fff;
+    }
+    #modal-detail .btn-close {
+        opacity: 0.85;
+        width: 1.5rem;
+        height: 1.5rem;
+        background-size: 1rem;
+        filter: brightness(0) invert(1);
+    }
+    #modal-detail .btn-close:hover {
+        opacity: 1;
+    }
+    body.dark-page #modal-detail .modal-header {
+        border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+</style>
+{% endblock stylesheets %}
+
+{% block content %}
+{% load humanize %}
+{% load user_agents %}
+{% csrf_token %}
+<input type="hidden" id="csrf-token" value="{{ csrf_token }}">
+<input type="hidden" id="can-edit" value="{{ btn.edit|yesno:'true,false' }}">
+
+<div class="container-fluid py-0">
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-6 p-4">
+                <!-- Header -->
+                <div class="row mb-4 align-items-center">
+                    <div class="{% if request|is_mobile %}col-12 mb-3{% else %}col-4{% endif %} d-flex align-items-center">
+                        <h4 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Jadwal Pesanan</h4>
+                    </div>
+                    <div class="{% if request|is_mobile %}col-6 mb-2{% else %}col-2{% endif %}">
+                        <select id="filter-branch" class="form-select form-select-sm">
+                            <option value="all">Semua Cabang</option>
+                            {% for area in areas %}
+                            <option value="{{ area.area_id }}">{{ area.area_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="{% if request|is_mobile %}col-6 mb-2{% else %}col-2{% endif %}">
+                        <select id="filter-status" class="form-select form-select-sm">
+                            <option value="all">Semua Status</option>
+                            <option value="UNSCHEDULED">Belum Dijadwalkan</option>
+                            <option value="SCHEDULED">Sudah Dijadwalkan</option>
+                            <option value="COOKING">Sedang Produksi</option>
+                            <option value="PACKING">Sedang Packing</option>
+                            <option value="READY">Siap Kirim</option>
+                            <option value="ON_DELIVERY">Dalam Pengiriman</option>
+                            <option value="COMPLETED">Selesai</option>
+                            <option value="CANCELLED">Dibatalkan</option>
+                        </select>
+                    </div>
+                    <div class="{% if request|is_mobile %}col-12 mt-2{% else %}col-3{% endif %}">
+                        <div class="input-group input-group-outline">
+                            <input type="text" id="filter-driver" class="form-control form-control-sm" placeholder="Cari Driver..." autocomplete="off" oninput="window._doFilterDriver()">
+                            <span class="input-group-text bg-transparent end-0 pe-3 py-2 cursor-pointer text-body z-index-0" onclick="window._doFilterDriver()"><i class="fas fa-search"></i></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calendar -->
+                <div id="calendar"></div>
+
+                <!-- Legend -->
+                <div class="d-flex justify-content-center gap-3 mt-3" style="font-size: 0.75rem; flex-wrap: wrap;">
+                    <span><span class="badge" style="background-color:#6c757d;">&nbsp;</span> Belum Dijadwalkan</span>
+                    <span><span class="badge" style="background-color:#ffc107;">&nbsp;</span> Sudah Dijadwalkan</span>
+                    <span><span class="badge" style="background-color:#fd7e14;">&nbsp;</span> Sedang Produksi</span>
+                    <span><span class="badge" style="background-color:#17a2b8;">&nbsp;</span> Sedang Packing</span>
+                    <span><span class="badge" style="background-color:#0dcaf0;">&nbsp;</span> Siap Kirim</span>
+                    <span><span class="badge" style="background-color:#0d6efd;">&nbsp;</span> Dalam Pengiriman</span>
+                    <span><span class="badge" style="background-color:#28a745;">&nbsp;</span> Selesai</span>
+                    <span><span class="badge" style="background-color:#dc3545;">&nbsp;</span> Dibatalkan</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detail Pesanan -->
+    <div class="modal fade" id="modal-detail" tabindex="-1" role="dialog" aria-labelledby="ModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="d-flex align-items-center">
+                        <h5 class="modal-title" id="ModalLabel">Detail Pesanan</h5>
+                        <span id="badge-schedule-status" class="badge rounded-pill text-white px-3 py-1 ms-3"></span>
+                    </div>
+                    <button type="button" class="btn-close btn-close-dark" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body border-bottom-0" id="modal-detail-body">
+                    <!-- Diisi via JavaScript -->
+                </div>
+                <div class="modal-footer border-0">
+                    <a id="btn-ubah" href="javascript:void(0)" class="btn btn-sm bg-gradient-warning text-white {% if not btn.edit and not request.user.is_superuser %}d-none{% endif %}" onclick="enableEditSchedule()">
+                        <i class="fas fa-edit me-1"></i>Ubah
+                    </a>
+                    <a id="btn-view" href="#" class="btn btn-sm bg-gradient-dark text-white" target="_blank">
+                        <i class="fas fa-eye me-1"></i>Lihat Detail
+                    </a>
+                    <a id="btn-invoice" href="#" class="btn btn-sm bg-gradient-dark text-white" target="_blank">
+                        <i class="fas fa-file-pdf me-1"></i>Invoice
+                    </a>
+                    <a id="btn-bap" href="#" class="btn btn-sm bg-gradient-dark text-white" target="_blank">
+                        <i class="fas fa-file-pdf me-1"></i>BAP
+                    </a>
+                    <a id="btn-checklist" href="#" class="btn btn-sm bg-gradient-dark text-white" target="_blank">
+                        <i class="fas fa-file-pdf me-1"></i>Checklist
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block javascripts %}
+<!-- FullCalendar -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/locale-all.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var isLoadingEvents = false;
+
+    function loadCalendarEvents() {
+        if (isLoadingEvents) return;
+        if (typeof calendar === 'undefined' || !calendar) return;
+        isLoadingEvents = true;
+        var view = calendar.view;
+        if (!view) { isLoadingEvents = false; return; }
+        var s = view.activeStart;
+        var e = view.activeEnd;
+        var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+        var startStr = s.getFullYear() + '-' + pad(s.getMonth() + 1) + '-' + pad(s.getDate());
+        var endStr = e.getFullYear() + '-' + pad(e.getMonth() + 1) + '-' + pad(e.getDate());
+        var params = new URLSearchParams({
+            start: startStr,
+            end: endStr,
+            branch: document.getElementById('filter-branch').value,
+            status: document.getElementById('filter-status').value,
+            driver: document.getElementById('filter-driver').value
+        });
+        var url = "{% url 'jadwal-events' %}?" + params.toString();
+        console.log('[JADWAL] Fetching events:', url);
+        fetch(url)
+            .then(function(response) {
+                if (!response.ok) throw new Error('Gagal memuat data');
+                return response.json();
+            })
+            .then(function(data) {
+                console.log('[JADWAL] Received events:', data.length);
+                calendar.removeAllEvents();
+                data.forEach(function(evt) {
+                    calendar.addEvent(evt);
+                });
+                isLoadingEvents = false;
+            })
+            .catch(function(err) {
+                isLoadingEvents = false;
+                console.error('[JADWAL] Error:', err);
+                alert('Gagal memuat data jadwal pesanan: ' + err.message);
+            });
+    }
+
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        locale: 'id',
+        initialView: window.innerWidth < 992 ? 'timeGridDay' : 'dayGridMonth',
+        eventTimeFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            separator: '.'
+        },
+        initialDate: new Date().toISOString().split('T')[0],
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        events: [],
+        eventClick: function(info) {
+            info.jsEvent.preventDefault();
+            var props = info.event.extendedProps;
+
+            var statusColors = {
+                'UNSCHEDULED': '#6c757d',
+                'SCHEDULED': '#ffc107',
+                'COOKING': '#fd7e14',
+                'PACKING': '#17a2b8',
+                'READY': '#0dcaf0',
+                'ON_DELIVERY': '#0d6efd',
+                'COMPLETED': '#28a745',
+                'CANCELLED': '#dc3545'
+            };
+
+            var scheduleStatuses = {
+                'UNSCHEDULED': 'Belum Dijadwalkan',
+                'SCHEDULED': 'Sudah Dijadwalkan',
+                'COOKING': 'Sedang Produksi',
+                'PACKING': 'Sedang Packing',
+                'READY': 'Siap Kirim',
+                'ON_DELIVERY': 'Dalam Pengiriman',
+                'COMPLETED': 'Selesai',
+                'CANCELLED': 'Dibatalkan'
+            };
+
+            var deliveryDate = info.event.start.toLocaleDateString('id-ID', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            var totalFormatted = parseInt(props.total_order).toLocaleString('id-ID');
+
+            var html = '<div class="schedule-view-mode" id="schedule-view">';
+            html += '<div class="pl-lg-0">';
+            html += '<div class="row">';
+            html += '<div class="col-md-6"><div class="shadow-none mb-2"><label class="form-control-label">Nama Pemesan</label><input type="text" class="form-control form-control-sm" value="' + props.customer_name + '" disabled></div></div>';
+            html += '<div class="col-md-6"><div class="shadow-none mb-2"><label class="form-control-label">Cabang</label><input type="text" class="form-control form-control-sm" value="' + props.area_name + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-12"><div class="shadow-none mb-2"><label class="form-control-label">Alamat Pemesan</label><input type="text" class="form-control form-control-sm" value="' + (props.customer_address || '-') + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-6"><div class="shadow-none mb-2"><label class="form-control-label">Produk</label><input type="text" class="form-control form-control-sm" value="' + (props.product_name || '-') + '" disabled></div></div>';
+            html += '<div class="col-md-3"><div class="shadow-none mb-2"><label class="form-control-label">Jenis Kambing</label><input type="text" class="form-control form-control-sm" value="' + (props.goat_type || '-') + '" disabled></div></div>';
+            html += '<div class="col-md-3"><div class="shadow-none mb-2"><label class="form-control-label">Quantity</label><input type="number" class="form-control form-control-sm" value="' + (props.quantity || 0) + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-12"><div class="shadow-none mb-2"><label class="form-control-label">Deskripsi</label><textarea class="form-control form-control-sm" rows="2" disabled>' + (props.description || '-') + '</textarea></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">Tanggal Kirim</label><input type="text" class="form-control form-control-sm" value="' + deliveryDate + '" disabled></div></div>';
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">Jam Keberangkatan</label><input type="text" class="form-control form-control-sm" value="' + (props.departure_time || '00:00') + '" disabled></div></div>';
+            var arrivalTime = '-';
+            if (props.time_arrival) {
+                var parts = props.time_arrival.split(':');
+                var h = parseInt(parts[0], 10);
+                var m = parseInt(parts[1], 10);
+                h = (h - 1 + 24) % 24;
+                arrivalTime = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+            }
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">Jam Tiba</label><input type="text" class="form-control form-control-sm" value="' + arrivalTime + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-6"><div class="shadow-none mb-2"><label class="form-control-label">Driver</label><input type="text" class="form-control form-control-sm" value="' + (props.driver || '-') + '" disabled></div></div>';
+            html += '<div class="col-md-6"><div class="shadow-none mb-2"><label class="form-control-label">CS</label><input type="text" class="form-control form-control-sm" value="' + props.cs + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-12"><div class="shadow-none mb-2"><label class="form-control-label">Sisa Masakan</label><textarea class="form-control form-control-sm" rows="2" disabled>' + (props.leftover_food || '') + '</textarea></div></div>';
+            html += '</div>';
+            html += '</div></div>';
+
+            html += '<div class="schedule-edit-mode d-none" id="schedule-edit">';
+            html += '<input type="hidden" id="edit-order-id" value="' + props.order_id + '">';
+            html += '<div class="pl-lg-0">';
+            html += '<div class="row">';
+            html += '<div class="col-md-6"><div class="shadow-none mb-2"><label class="form-control-label">Nama Pemesan</label><input type="text" class="form-control form-control-sm" value="' + props.customer_name + '" disabled></div></div>';
+            html += '<div class="col-md-6"><div class="shadow-none mb-2"><label class="form-control-label">Cabang</label><input type="text" class="form-control form-control-sm" value="' + props.area_name + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-12"><div class="shadow-none mb-2"><label class="form-control-label">Alamat Pemesan</label><input type="text" class="form-control form-control-sm" value="' + (props.customer_address || '-') + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-6"><div class="shadow-none mb-2"><label class="form-control-label">Produk</label><input type="text" class="form-control form-control-sm" value="' + (props.product_name || '-') + '" disabled></div></div>';
+            html += '<div class="col-md-3"><div class="shadow-none mb-2"><label class="form-control-label">Jenis Kambing</label><input type="text" class="form-control form-control-sm" value="' + (props.goat_type || '-') + '" disabled></div></div>';
+            html += '<div class="col-md-3"><div class="shadow-none mb-2"><label class="form-control-label">Quantity</label><input type="number" class="form-control form-control-sm" value="' + (props.quantity || 0) + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-12"><div class="shadow-none mb-2"><label class="form-control-label">Deskripsi</label><textarea class="form-control form-control-sm" rows="2" disabled>' + (props.description || '-') + '</textarea></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">Tanggal Kirim</label><input type="text" class="form-control form-control-sm" value="' + deliveryDate + '" disabled></div></div>';
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">Jam Keberangkatan</label><input type="time" id="edit-departure-time" class="form-control form-control-sm" value="' + (props.departure_time || '00:00') + '"></div></div>';
+            var arrivalTime2 = '-';
+            if (props.time_arrival) {
+                var parts2 = props.time_arrival.split(':');
+                var h2 = parseInt(parts2[0], 10);
+                var m2 = parseInt(parts2[1], 10);
+                h2 = (h2 - 1 + 24) % 24;
+                arrivalTime2 = (h2 < 10 ? '0' : '') + h2 + ':' + (m2 < 10 ? '0' : '') + m2;
+            }
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">Jam Tiba</label><input type="text" class="form-control form-control-sm" value="' + arrivalTime2 + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">Driver</label><input type="text" id="edit-driver" class="form-control form-control-sm" value="' + (props.driver || '') + '" placeholder="Nama driver"></div></div>';
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">Status Jadwal</label><select id="edit-schedule-status" class="form-select form-select-sm">';
+            Object.keys(scheduleStatuses).forEach(function(key) {
+                var selected = key === props.schedule_status ? ' selected' : '';
+                html += '<option value="' + key + '"' + selected + '>' + scheduleStatuses[key] + '</option>';
+            });
+            html += '</select></div></div>';
+            html += '<div class="col-md-4"><div class="shadow-none mb-2"><label class="form-control-label">CS</label><input type="text" class="form-control form-control-sm" value="' + props.cs + '" disabled></div></div>';
+            html += '</div>';
+            html += '<div class="row">';
+            html += '<div class="col-md-12"><div class="shadow-none mb-2"><label class="form-control-label">Sisa Masakan</label><textarea id="edit-leftover-food" class="form-control form-control-sm" rows="2" placeholder="Masukkan sisa masakan">' + (props.leftover_food || '') + '</textarea></div></div>';
+            html += '</div>';
+            html += '</div></div>';
+
+            document.getElementById('modal-detail-body').innerHTML = html;
+            var badgeEl = document.getElementById('badge-schedule-status');
+            var scheduleStatusColors = {
+                'UNSCHEDULED': '#6c757d', 'SCHEDULED': '#ffc107',
+                'COOKING': '#fd7e14', 'PACKING': '#17a2b8',
+                'READY': '#0dcaf0', 'ON_DELIVERY': '#0d6efd',
+                'COMPLETED': '#28a745', 'CANCELLED': '#dc3545'
+            };
+            var scheduleStatusLabels = {
+                'UNSCHEDULED': 'Belum Dijadwalkan', 'SCHEDULED': 'Sudah Dijadwalkan',
+                'COOKING': 'Sedang Produksi', 'PACKING': 'Sedang Packing',
+                'READY': 'Siap Kirim', 'ON_DELIVERY': 'Dalam Pengiriman',
+                'COMPLETED': 'Selesai', 'CANCELLED': 'Dibatalkan'
+            };
+            badgeEl.textContent = scheduleStatusLabels[props.schedule_status] || 'Belum Dijadwalkan';
+            badgeEl.style.backgroundColor = scheduleStatusColors[props.schedule_status] || '#6c757d';
+
+            var orderId = encodeURIComponent(props.order_id);
+            document.getElementById('btn-view').href = '/order/view/' + orderId + '/0/0/0/0/';
+            document.getElementById('btn-invoice').href = '/order/invoice/' + orderId + '/';
+            document.getElementById('btn-bap').href = '/order/bap/' + orderId + '/';
+            document.getElementById('btn-checklist').href = '/order/checklist/' + orderId + '/';
+
+            window._currentOrderId = props.order_id;
+            window._currentEventInfo = info;
+
+            var modal = new bootstrap.Modal(document.getElementById('modal-detail'));
+            modal.show();
+        },
+        eventDidMount: function(info) {
+            var scheduleStatusLabels = {
+                'UNSCHEDULED': 'Belum Dijadwalkan', 'SCHEDULED': 'Sudah Dijadwalkan',
+                'COOKING': 'Sedang Produksi', 'PACKING': 'Sedang Packing',
+                'READY': 'Siap Kirim', 'ON_DELIVERY': 'Dalam Pengiriman',
+                'COMPLETED': 'Selesai', 'CANCELLED': 'Dibatalkan'
+            };
+            info.el.title = info.event.extendedProps.customer_name + ' - ' + (scheduleStatusLabels[info.event.extendedProps.schedule_status] || info.event.extendedProps.schedule_status);
+        },
+        dayCellDidMount: function(info) {
+            var bottom = info.el.querySelector('.fc-daygrid-day-bottom');
+            if (bottom) bottom.style.setProperty('display', 'none', 'important');
+            var events = info.el.querySelector('.fc-daygrid-day-events');
+            if (events) {
+                events.style.setProperty('flex', '1 1 0%', 'important');
+                events.style.setProperty('justify-content', 'flex-start', 'important');
+                events.style.setProperty('align-content', 'flex-start', 'important');
+            }
+        },
+        datesSet: function() {
+            loadCalendarEvents();
+            setTimeout(patchAllCells, 50);
+            setTimeout(patchAllCells, 200);
+            setTimeout(patchAllCells, 500);
+        },
+        height: 'auto',
+        stickyHeaderDates: false,
+        dayMaxEvents: 4,
+        moreLinkText: function(n) {
+            return '+' + n + ' lainnya';
+        }
+    });
+
+    calendar.render();
+
+    function applyTopAlign(el) {
+        el.style.setProperty('flex', '1 1 0%', 'important');
+        el.style.setProperty('justify-content', 'flex-start', 'important');
+        el.style.setProperty('align-content', 'flex-start', 'important');
+    }
+
+    function patchAllCells() {
+        document.querySelectorAll('.fc-daygrid-day-events').forEach(applyTopAlign);
+        document.querySelectorAll('.fc-daygrid-day-bottom').forEach(function(el) {
+            el.style.setProperty('display', 'none', 'important');
+        });
+    }
+
+    patchAllCells();
+
+    var observer = new MutationObserver(function(mutations) {
+        var needsPatch = false;
+        for (var i = 0; i < mutations.length; i++) {
+            var m = mutations[i];
+            if (m.type === 'attributes' && m.attributeName === 'style') {
+                var t = m.target;
+                if (t.classList && t.classList.contains('fc-daygrid-day-events')) {
+                    needsPatch = true;
+                    break;
+                }
+            }
+            if (m.type === 'childList') {
+                needsPatch = true;
+                break;
+            }
+        }
+        if (needsPatch) patchAllCells();
+    });
+
+    observer.observe(calendarEl, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+
+    window.enableEditSchedule = function() {
+        document.getElementById('schedule-view').classList.add('d-none');
+        document.getElementById('schedule-edit').classList.remove('d-none');
+        document.getElementById('btn-ubah').classList.add('d-none');
+        document.getElementById('btn-view').classList.add('d-none');
+        document.getElementById('btn-invoice').classList.add('d-none');
+        document.getElementById('btn-bap').classList.add('d-none');
+        document.getElementById('btn-checklist').classList.add('d-none');
+        var footer = document.querySelector('#modal-detail .modal-footer');
+        var btnBatal = document.createElement('button');
+        btnBatal.type = 'button';
+        btnBatal.className = 'btn btn-sm bg-gradient-dark';
+        btnBatal.id = 'btn-batal-edit';
+        btnBatal.innerHTML = 'Batal';
+        btnBatal.onclick = window.cancelEdit;
+        footer.insertBefore(btnBatal, footer.firstChild);
+        var btnSimpan = document.createElement('button');
+        btnSimpan.type = 'button';
+        btnSimpan.className = 'btn btn-sm bg-gradient-primary text-white';
+        btnSimpan.id = 'btn-simpan';
+        btnSimpan.innerHTML = '<i class="fas fa-save me-1"></i>Simpan';
+        btnSimpan.addEventListener('click', function() {
+            window.saveSchedule();
+        });
+        footer.insertBefore(btnSimpan, footer.firstChild);
+    };
+
+    window.cancelEdit = function() {
+        document.getElementById('schedule-edit').classList.add('d-none');
+        document.getElementById('schedule-view').classList.remove('d-none');
+        document.getElementById('btn-ubah').classList.remove('d-none');
+        document.getElementById('btn-view').classList.remove('d-none');
+        document.getElementById('btn-invoice').classList.remove('d-none');
+        document.getElementById('btn-bap').classList.remove('d-none');
+        document.getElementById('btn-checklist').classList.remove('d-none');
+        var btnSimpan = document.getElementById('btn-simpan');
+        var btnBatal = document.getElementById('btn-batal-edit');
+        if (btnSimpan) btnSimpan.remove();
+        if (btnBatal) btnBatal.remove();
+    };
+
+    window.saveSchedule = function() {
+        var orderId = document.getElementById('edit-order-id').value;
+        var driver = document.getElementById('edit-driver').value;
+        var departureTime = document.getElementById('edit-departure-time').value;
+        var scheduleStatus = document.getElementById('edit-schedule-status').value;
+        var leftoverFood = document.getElementById('edit-leftover-food').value;
+        var csrfToken = document.getElementById('csrf-token').value;
+
+        console.log('Saving schedule:', orderId, scheduleStatus);
+
+        fetch('/jadwal/save/' + orderId + '/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            redirect: 'follow',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                driver: driver,
+                departure_time: departureTime,
+                schedule_status: scheduleStatus,
+                leftover_food: leftoverFood
+            })
+        })
+        .then(function(response) {
+            console.log('Save response:', response.status, response.url, response.redirected);
+            if (response.redirected) {
+                throw new Error('Session expired, please login again');
+            }
+            if (!response.ok) {
+                return response.text().then(function(text) { throw new Error(text); });
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            console.log('Save result:', data);
+            if (data.success) {
+                window.cancelEdit();
+                bootstrap.Modal.getInstance(document.getElementById('modal-detail')).hide();
+                setTimeout(function() { window.location.reload(); }, 200);
+            } else {
+                alert('Gagal menyimpan data: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(function(err) {
+            alert('Terjadi kesalahan: ' + err.message);
+        });
+    };
+
+    document.getElementById('filter-branch').addEventListener('change', function() {
+        loadCalendarEvents();
+    });
+
+    document.getElementById('filter-status').addEventListener('change', function() {
+        loadCalendarEvents();
+    });
+
+    var driverTimeout;
+    window._doFilterDriver = function() {
+        clearTimeout(driverTimeout);
+        driverTimeout = setTimeout(function() {
+            loadCalendarEvents();
+        }, 500);
+    };
+});
+</script>
+{% endblock javascripts %}

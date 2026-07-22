@@ -33,7 +33,7 @@
                             </div>
                             {% endif %} -->
                             <div class="row">
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.package_id.label_tag }}{{ form.package_id }}
                                         <div class="text-sm text-danger">
@@ -41,7 +41,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.package_name.label_tag }}{{ form.package_name }}
                                         <div class="text-sm text-danger">
@@ -49,7 +49,7 @@
                                         </div>
                                     </div>  
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.category.label_tag }}
                                         <select name="category" class="form-control form-select-sm">
@@ -63,9 +63,7 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-2">
+                                <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.male_price.label_tag }}{{ form.male_price }}
                                         <div class="text-sm text-danger">
@@ -73,7 +71,9 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-2">
+                            </div>
+                            <div class="row">
+                                <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.female_price.label_tag }}{{ form.female_price }}
                                         <div class="text-sm text-danger">
@@ -97,16 +97,44 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-2">
                                     <div class="shadow-none">
                                         {{ form.type.label_tag }}
                                         <select name="type" class="form-control form-select-sm">
-                                            <option value="">-- Pilih Jenis Kambing --</option>
+                                            <option value="">-- Pilih --</option>
                                             <option value="Jantan">Jantan</option>
                                             <option value="Betina">Betina</option>
                                         </select>
                                         <div class="text-sm text-danger">
                                             {{ form.type.errors }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="shadow-none">
+                                        {{ form.goat_type.label_tag }}
+                                        <select name="goat_type" class="form-control form-select-sm">
+                                            <option value="">-- Pilih --</option>
+                                            {% for item in goat_types %}
+                                            <option value="{{ item.goat_type_id }}">{{ item.goat_type_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="text-sm text-danger">
+                                            {{ form.goat_type.errors }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    <div class="shadow-none">
+                                        {{ form.dashboard.label_tag }}
+                                        <select name="dashboard" class="form-control form-select-sm">
+                                            <option value="">-- Pilih --</option>
+                                            {% for item in dashboards %}
+                                            <option value="{{ item.dashboard_id }}">{{ item.dashboard_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="text-sm text-danger">
+                                            {{ form.dashboard.errors }}
                                         </div>
                                     </div>
                                 </div>

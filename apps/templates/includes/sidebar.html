@@ -1,36 +1,175 @@
 {% load static %}
 {% load user_agents %}
-<aside class="sidenav navbar navbar-vertical navbar-expand-xs border-0 border-radius-xl my-3 fixed-start ms-3 bg-default {% if request|is_mobile %}z-index-3{% endif %}" id="sidenav-main">
+<style>
+  .sidenav-logo-full { display: block; }
+  .sidenav-logo-icon { display: none; }
+  .g-sidenav-hidden .sidenav-logo-full { display: none !important; }
+  .g-sidenav-hidden .sidenav-logo-icon { display: block !important; width: 2rem !important; height: auto !important; }
+
+  /* Hidden by default, shown when sidebar collapsed */
+  .sidenav-mini-icon { display: none !important; }
+  .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link .sidenav-mini-icon {
+    display: block !important;
+    margin: 0 auto !important;
+  }
+  .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-align: center;
+    margin-left: 0 !important;
+  }
+  .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link:before {
+    display: none !important;
+  }
+  .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav {
+    padding-left: 0 !important;
+  }
+  .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link .sidenav-mini-icon .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #6c6c6c; display: inline-block; margin-left: 19px;
+  }
+  body.dark-page .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link .sidenav-mini-icon .dot {
+    background: #fff;
+  }
+  .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item.active .nav-link .sidenav-mini-icon .dot,
+  .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link.active .sidenav-mini-icon .dot {
+    background: #ff8c42;
+  }
+  .g-sidenav-hidden .navbar-vertical .multi-level {
+    margin-left: 0 !important;
+  }
+
+  /* Submenu offset - replaces inline style */
+  .sidenav .multi-level {
+    margin-left: 3.25rem;
+  }
+  .sidenav .multi-level .nav .nav-item .nav-link {
+    padding-left: 0.75rem;
+  }
+
+  /* Mobile sidebar - completely independent of argon.js g-sidenav system */
+  @media (max-width: 991.98px) {
+    .sidenav.navbar-vertical {
+      transition: transform 0.3s ease-in-out, visibility 0.3s ease-in-out;
+      z-index: 1050 !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+      height: 100vh !important;
+      max-height: 100vh !important;
+      overflow-y: auto !important;
+      top: 0 !important;
+      left: 0 !important;
+      transform: translateX(0) !important;
+      padding-top: 0 !important;
+    }
+    /* When sidebar is closed - slide out */
+    body:not(.mobile-sidebar-open) .sidenav.navbar-vertical {
+      transform: translateX(-100%) !important;
+      visibility: hidden !important;
+    }
+    /* When sidebar is open - slide in */
+    body.mobile-sidebar-open .sidenav.navbar-vertical {
+      transform: translateX(0) !important;
+      visibility: visible !important;
+    }
+    /* Close button - visible only on mobile */
+    .mobile-sidebar-close {
+      display: flex;
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0,0,0,0.08);
+      color: #344767;
+      font-size: 18px;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .mobile-sidebar-close:hover {
+      background: rgba(0,0,0,0.15);
+    }
+    body.dark-page .mobile-sidebar-close {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+    body.dark-page .mobile-sidebar-close:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    /* Fix submenu layout on mobile */
+    .sidenav .multi-level {
+      margin-left: 4rem !important;
+      padding-left: 0 !important;
+    }
+    .sidenav .multi-level .nav .nav-item .nav-link {
+      padding-left: 0 !important;
+      padding-top: 0.4rem !important;
+      padding-bottom: 0.4rem !important;
+      font-size: 0.875rem;
+    }
+    /* Hide mini icons on mobile - not needed */
+    .sidenav .sidenav-mini-icon {
+      display: none !important;
+    }
+    /* Override collapsed sidebar dot styles on mobile */
+    .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link .sidenav-mini-icon {
+      display: none !important;
+    }
+    .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link {
+      padding-left: 0.75rem !important;
+      padding-right: 0 !important;
+      text-align: left !important;
+      margin-left: 0 !important;
+    }
+    .g-sidenav-hidden .navbar-vertical .multi-level {
+      margin-left: 3.25rem !important;
+    }
+    /* Ensure nav-link-text is visible */
+    .sidenav .nav-link-text {
+      opacity: 1 !important;
+      width: auto !important;
+    }
+    /* Sidenav header positioning */
+    .sidenav-header {
+      position: relative;
+    }
+  }
+  /* Hide close button on desktop */
+  @media (min-width: 992px) {
+    .mobile-sidebar-close {
+      display: none !important;
+    }
+  }
+</style>
+<aside class="sidenav navbar navbar-vertical navbar-expand-xs border-0 border-radius-xl my-3 fixed-start ms-3 bg-default z-index-3" id="sidenav-main">
   <div class="sidenav-header">
-    <i class="fas fa-times p-3 cursor-pointer text-secondary opacity-5 position-absolute end-0 top-0 d-none d-xl-none" aria-hidden="true" id="iconSidenav"></i>
     <a class="navbar-brand button cursor-pointer m-0 pt-4" {% if crud != 'add' and crud != 'update' %}href="{% url 'home' %}"{% endif %}>
-      <img src="{% static 'img/brand/color.png' %}" class="navbar-brand-img w-95" alt="main_logo">
+      <img src="{% static 'img/brand/color.png' %}" class="navbar-brand-img w-95 sidenav-logo-full" alt="main_logo">
+      <img src="{% static 'img/brand/color-icon.png' %}" class="navbar-brand-img sidenav-logo-icon" alt="main_logo_icon">
     </a>
+    <button class="mobile-sidebar-close d-lg-none" id="mobileSidebarClose" aria-label="Close sidebar">
+      <i class="fa fa-times"></i>
+    </button>
   </div>
   <hr class="horizontal default mt-2">
   <div class="collapse navbar-collapse  w-auto mb-4 " id="sidenav-collapse-main">
     <ul class="navbar-nav">
-      <!-- <li class="nav-item">
-        <a href="{% url 'home' %}" class="nav-link {% if 'index' in segment %} active {% endif %}">
-
+      <li class="nav-item">
+        <a href="{% url 'dashboard' %}" class="nav-link {% if 'dashboard' in segment %} active {% endif %}">
           <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
-            <svg width="12px" height="12px" viewBox="0 0 45 40" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-              <title>shop </title>
-              <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-                <g transform="translate(-1716.000000, -439.000000)" fill="#FFFFFF" fill-rule="nonzero">
-                  <g transform="translate(1716.000000, 291.000000)">
-                    <g transform="translate(0.000000, 148.000000)">
-                      <path class="color-background opacity-6" d="M46.7199583,10.7414583 L40.8449583,0.949791667 C40.4909749,0.360605034 39.8540131,0 39.1666667,0 L7.83333333,0 C7.1459869,0 6.50902508,0.360605034 6.15504167,0.949791667 L0.280041667,10.7414583 C0.0969176761,11.0460037 -1.23209662e-05,11.3946378 -1.23209662e-05,11.75 C-0.00758042603,16.0663731 3.48367543,19.5725301 7.80004167,19.5833333 L7.81570833,19.5833333 C9.75003686,19.5882688 11.6168794,18.8726691 13.0522917,17.5760417 C16.0171492,20.2556967 20.5292675,20.2556967 23.494125,17.5760417 C26.4604562,20.2616016 30.9794188,20.2616016 33.94575,17.5760417 C36.2421905,19.6477597 39.5441143,20.1708521 42.3684437,18.9103691 C45.1927731,17.649886 47.0084685,14.8428276 47.0000295,11.75 C47.0000295,11.3946378 46.9030823,11.0460037 46.7199583,10.7414583 Z"></path>
-                      <path class="color-background" d="M39.198,22.4912623 C37.3776246,22.4928106 35.5817531,22.0149171 33.951625,21.0951667 L33.92225,21.1107282 C31.1430221,22.6838032 27.9255001,22.9318916 24.9844167,21.7998837 C24.4750389,21.605469 23.9777983,21.3722567 23.4960833,21.1018359 L23.4745417,21.1129513 C20.6961809,22.6871153 17.4786145,22.9344611 14.5386667,21.7998837 C14.029926,21.6054643 13.533337,21.3722507 13.0522917,21.1018359 C11.4250962,22.0190609 9.63246555,22.4947009 7.81570833,22.4912623 C7.16510551,22.4842162 6.51607673,22.4173045 5.875,22.2911849 L5.875,44.7220845 C5.875,45.9498589 6.7517757,46.9451667 7.83333333,46.9451667 L19.5833333,46.9451667 L19.5833333,33.6066734 L27.4166667,33.6066734 L27.4166667,46.9451667 L39.1666667,46.9451667 C40.2482243,46.9451667 41.125,45.9498589 41.125,44.7220845 L41.125,22.2822926 C40.4887822,22.4116582 39.8442868,22.4815492 39.198,22.4912623 Z"></path>
-                    </g>
-                  </g>
-                </g>
-              </g>
-            </svg>
+            {% if 'dashboard' in segment %}
+            <img src="{% static 'img/icons/dashboard-active.png' %}" alt="dashboard" style="width: 18px; height: 18px; object-fit: contain;">
+            {% else %}
+            <img src="{% static 'img/icons/dashboard-inactive.png' %}" alt="dashboard" style="width: 18px; height: 18px; object-fit: contain;">
+            {% endif %}
           </div>
           <span class="nav-link-text ms-1">Dashboard</span>
         </a>
-      </li> -->
+      </li>
       <li class="nav-item">
         <a class="nav-link {% if 'transaction' in group_segment %}active{% endif %} {% if 'claim' not in group_segment %}collapsed{% endif %}" href="" data-bs-toggle="collapse" data-bs-target="#claim-menu">
           <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
@@ -62,24 +201,33 @@
             </svg>
             {% endif %}
           </div>
-          <span class="nav-link-text ms-1">Transaksi{% if notif > 0 %}<span class="badge bg-gradient-danger rounded-pill p-1 ms-2"><span class="visually-hidden"></span></span>{% endif %}</span>
+          <span class="nav-link-text ms-1">Transaksi<span id="transaksi-badge" class="badge bg-gradient-danger rounded-pill p-1 ms-2 d-none"><span class="visually-hidden"></span></span></span>
         </a>
 
-        <div class="multi-level ms-5 collapse {% if 'transaction' in group_segment %}show{% endif %}" role="list" id="claim-menu" aria-expanded="{% if 'claim' in group_segment %}true{% else %}false{% endif %}">
+        <div class="multi-level collapse {% if 'transaction' in group_segment %}show{% endif %}" role="list" id="claim-menu" aria-expanded="{% if 'claim' in group_segment %}true{% else %}false{% endif %}">
           <ul class="flex-column nav">
             <li class="nav-item {% if segment == 'order' %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'ORDER' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'order-index' 'all' '0' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'ORDER' not in role and not request.user.is_superuser %}disabled{% endif %}">Pemesanan{% if notif > 0 %}<span class="badge bg-gradient-danger rounded-pill badge-notification ms-2">{{ notif }}</span>{% endif %}</span>
               </a>
             </li>
             <li class="nav-item {% if 'form' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'FORM' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'form-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'FORM' not in role and not request.user.is_superuser %}disabled{% endif %}">Form</span>
               </a>
             </li>
             <li class="nav-item {% if segment == 'order-archive' %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'ORDER-ARCHIVE' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'order-archive' 'all' '0' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'ORDER-ARCHIVE' not in role and not request.user.is_superuser %}disabled{% endif %}">Arsip</span>
+              </a>
+            </li>
+            <li class="nav-item {% if segment == 'jadwal' %}active{% endif %} list-unstyled">
+              <a class="nav-link button cursor-pointer {% if 'JADWAL' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'jadwal-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
+                <span class="nav-link-text ms-1 {% if 'JADWAL' not in role and not request.user.is_superuser %}disabled{% endif %}">Jadwal<span id="jadwal-reminder-badge" class="badge bg-gradient-danger rounded-pill badge-notification ms-2 d-none" style="font-size: 0.6rem;"></span></span>
               </a>
             </li>
           </ul>
@@ -107,10 +255,11 @@
           <span class="nav-link-text ms-1">Keuangan</span>
         </a>
 
-        <div class="multi-level ms-5 collapse {% if 'accounting' in group_segment %}show{% endif %}" role="list" id="accounting-menu" aria-expanded="{% if 'accounting' in group_segment %}true{% else %}false{% endif %}">
+        <div class="multi-level collapse {% if 'accounting' in group_segment %}show{% endif %}" role="list" id="accounting-menu" aria-expanded="{% if 'accounting' in group_segment %}true{% else %}false{% endif %}">
           <ul class="flex-column nav">
             <li class="nav-item {% if segment == 'cash-in' %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'CASH-IN' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'cashin-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'CASH-IN' not in role and not request.user.is_superuser %}disabled{% endif %}">Uang Masuk</span>
               </a>
             </li>
@@ -143,55 +292,77 @@
           <span class="nav-link-text ms-1">Data Master</span>
         </a>
 
-        <div class="multi-level ms-5 collapse {% if 'master' in group_segment %}show{% endif %}" role="list" id="user-menu" aria-expanded="{% if 'master' in group_segment %}true{% else %}false{% endif %}">
+        <div class="multi-level collapse {% if 'master' in group_segment %}show{% endif %}" role="list" id="user-menu" aria-expanded="{% if 'master' in group_segment %}true{% else %}false{% endif %}">
           <ul class="flex-column nav">
             <li class="nav-item {% if 'user' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'USER' not in role and not request.user.is_superuser %}d-none{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'user-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'USER' not in role and not request.user.is_superuser %}d-none{% endif %}">Pengguna</span>
               </a>
             </li>
             <li class="nav-item {% if 'customer' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'CUSTOMER' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'customer-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'CUSTOMER' not in role and not request.user.is_superuser %}disabled{% endif %}">Pelanggan</span>
               </a>
             </li>
             <li class="nav-item {% if 'area_sales' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'AREA' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'area-sales-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'AREA' not in role and not request.user.is_superuser %}disabled{% endif %}">Cabang</span>
               </a>
             </li>
             <li class="nav-item {% if 'position' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'POSITION' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'position-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'POSITION' not in role and not request.user.is_superuser %}disabled{% endif %}">Posisi</span>
               </a>
             </li>
             <li class="nav-item {% if 'menu' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'MENU' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'menu-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'MENU' not in role and not request.user.is_superuser %}disabled{% endif %}">Menu</span>
               </a>
             </li>
             <li class="nav-item {% if 'cuisine' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'CUISINE' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'cuisine-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'CUISINE' not in role and not request.user.is_superuser %}disabled{% endif %}">Masakan</span>
               </a>
             </li>
             <li class="nav-item {% if 'equipment' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'EQUIPMENT' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'equipment-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'EQUIPMENT' not in role and not request.user.is_superuser %}disabled{% endif %}">Pelengkap</span>
               </a>
             </li>
             <li class="nav-item {% if 'category' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'CATEGORY' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'category-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'CATEGORY' not in role and not request.user.is_superuser %}disabled{% endif %}">Kategori</span>
+              </a>
+            </li>
+            <li class="nav-item {% if 'goat_type' in segment %}active{% endif %} list-unstyled">
+              <a class="nav-link button cursor-pointer {% if 'GOATTYPE' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'goat-type-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
+                <span class="nav-link-text ms-1 {% if 'GOATTYPE' not in role and not request.user.is_superuser %}disabled{% endif %}">Jenis Kambing</span>
+              </a>
+            </li>
+            <li class="nav-item {% if 'dashboard_card' in segment %}active{% endif %} list-unstyled">
+              <a class="nav-link button cursor-pointer {% if 'DASHBOARD' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'dashboard-card-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
+                <span class="nav-link-text ms-1 {% if 'DASHBOARD' not in role and not request.user.is_superuser %}disabled{% endif %}">Dashboard</span>
               </a>
             </li>
             <li class="nav-item {% if 'package' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'PACKAGE' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'package-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'PACKAGE' not in role and not request.user.is_superuser %}disabled{% endif %}">Paket</span>
               </a>
             </li>
             <li class="nav-item {% if 'promo' in segment %}active{% endif %} list-unstyled">
               <a class="nav-link button cursor-pointer {% if 'PROMO' not in role and not request.user.is_superuser %}disabled{% endif %}" {% if crud != 'add' and crud != 'update' %}href="{% url 'promo-index' %}"{% endif %}>
+                <span class="sidenav-mini-icon"><span class="dot"></span></span>
                 <span class="nav-link-text ms-1 {% if 'PROMO' not in role and not request.user.is_superuser %}disabled{% endif %}">Promo</span>
               </a>
             </li>

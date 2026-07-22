@@ -1,5 +1,144 @@
 {% load static %}
 {% load user_agents %}
+<style>
+.reminder-dropdown-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 380px;
+  max-height: 420px;
+  overflow: hidden;
+  z-index: 1060;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 40px rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.08);
+  background: #1e2a3a;
+}
+.reminder-dropdown-header {
+  padding: 14px 18px 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,.55);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  align-items: center;
+}
+.reminder-dropdown-body {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px 8px;
+}
+.reminder-dropdown-body::-webkit-scrollbar { width: 4px; }
+.reminder-dropdown-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
+.reminder-dropdown-body::-webkit-scrollbar-track { background: transparent; }
+.reminder-loading {
+  padding: 24px 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,.4);
+}
+.reminder-empty {
+  padding: 28px 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,.35);
+}
+.reminder-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition: background .15s;
+  margin-bottom: 2px;
+}
+.reminder-item:hover {
+  background: rgba(255,255,255,.06);
+}
+.reminder-icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  margin-top: 1px;
+}
+.reminder-text {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: rgba(255,255,255,.78);
+  flex: 1;
+  word-break: break-word;
+}
+body:not(.dark-page) .reminder-dropdown-menu {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: 0 10px 40px rgba(0,0,0,.12);
+}
+body:not(.dark-page) .reminder-dropdown-header {
+  color: rgba(0,0,0,.5);
+  border-bottom-color: rgba(0,0,0,.06);
+}
+body:not(.dark-page) .reminder-item:hover {
+  background: rgba(0,0,0,.04);
+}
+body:not(.dark-page) .reminder-text {
+  color: rgba(0,0,0,.72);
+}
+body:not(.dark-page) .reminder-loading,
+body:not(.dark-page) .reminder-empty {
+  color: rgba(0,0,0,.4);
+}
+
+/* Mobile reminder dropdown - centered on screen */
+@media (max-width: 991.98px) {
+  .reminder-dropdown-menu {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%);
+    width: calc(100vw - 32px) !important;
+    max-width: 400px !important;
+    max-height: 60vh !important;
+  }
+  .reminder-dropdown-body {
+    max-height: calc(60vh - 60px) !important;
+  }
+}
+
+/* Mobile sidebar overlay */
+#sidebarOverlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1040;
+  transition: opacity 0.3s ease;
+}
+#sidebarOverlay.active {
+  display: block;
+}
+
+/* Mobile hamburger button - visible only below lg */
+.mobile-sidenav-toggle {
+  display: none;
+}
+</style>
+
+<!-- Sidebar overlay for mobile -->
+<div id="sidebarOverlay"></div>
+
 <!-- Navbar -->
 <nav class="navbar navbar-main navbar-expand-lg px-0 mx-4 shadow-none border-radius-xl z-index-2" id="navbarBlur" navbar-scroll="true">
   <div class="container-fluid py-1 px-3">
@@ -10,12 +149,48 @@
         </li>
       </ol>
     </nav>
+
+    <!-- Hamburger button - outside collapse so it's always visible on mobile -->
+    <ul class="navbar-nav d-lg-none ms-auto">
+      <li class="nav-item d-flex align-items-center">
+        <a href="javascript:;" class="nav-link text-body p-0 m-0" id="iconNavbarSidenavMobile">
+          <div class="sidenav-toggler-inner position-relative">
+            <span id="hamburger-mobile-badge" class="position-absolute top-0 start-100 translate-middle p-1 bg-gradient-danger border border-light rounded-circle z-index-1 d-none">
+              <span class="visually-hidden">New alerts</span>
+            </span>
+            <i class="sidenav-toggler-line"></i>
+            <i class="sidenav-toggler-line"></i>
+            <i class="sidenav-toggler-line"></i>
+          </div>
+        </a>
+      </li>
+    </ul>
+
     <div class="collapse navbar-collapse mt-sm-0 mt-2 me-md-0 me-sm-4" id="navbar">
       <ul class="navbar-nav  ms-xl-auto {% if request|is_mobile %}justify-content-end{% endif %}">
         <li class="nav-item d-flex align-items-center">
           <div class="nav-link text-body font-weight-bold px-0">
             <i class="fa fa-user me-sm-1"></i>
             <span class="d-sm-inline me-3">{% if request|is_mobile %}&nbsp;{{ request.user.username|truncatechars:10 }}{% else %}{{ request.user.username }}{% endif %}</span>
+          </div>
+        </li>
+
+        <li class="nav-item px-2 d-flex align-items-center position-relative" style="z-index: 1050;">
+          <a href="javascript:void(0)" class="nav-link text-body p-0 position-relative" id="reminderDropdown" role="button" style="z-index: 1050;">
+            <i class="fa fa-bell cursor-pointer"></i>
+            <span id="reminder-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-gradient-danger d-none" style="font-size: 0.6rem; padding: 2px 5px;">
+              <span id="reminder-count">0</span>
+            </span>
+          </a>
+          <div id="reminder-menu" class="reminder-dropdown-menu" style="display:none;">
+            <div class="reminder-dropdown-header">
+              <i class="fa fa-bell me-2"></i>Pengingat Hari Ini
+            </div>
+            <div id="reminder-list" class="reminder-dropdown-body">
+              <div class="reminder-loading">
+                <i class="fa fa-spinner fa-spin me-2"></i>Memuat data...
+              </div>
+            </div>
           </div>
         </li>
         
@@ -35,22 +210,19 @@
           <input type="checkbox" class="d-none" id="theme-switch"/>
         </li>
 
-        {% if request|is_mobile %}
-        <li class="nav-item d-xl-none ps-3 d-flex align-items-center">
+        <!-- Hamburger - desktop only (inside collapse) -->
+        <li class="nav-item ps-3 d-flex align-items-center d-none d-lg-flex">
           <a href="javascript:;" class="nav-link text-body p-0 m-0" id="iconNavbarSidenav">
             <div class="sidenav-toggler-inner position-relative">
-              {% if notif > 0 %}
-              <span class="position-absolute top-0 start-100 translate-middle p-1 bg-gradient-danger border border-light rounded-circle z-index-1">
+              <span id="hamburger-badge" class="position-absolute top-0 start-100 translate-middle p-1 bg-gradient-danger border border-light rounded-circle z-index-1 d-none">
                 <span class="visually-hidden">New alerts</span>
               </span>
-              {% endif %}
               <i class="sidenav-toggler-line"></i>
               <i class="sidenav-toggler-line"></i>
               <i class="sidenav-toggler-line"></i>
             </div>
           </a>
         </li>
-        {% endif %}
         
       </ul>
     </div>
@@ -81,5 +253,177 @@
 <div>
   <img src="/apps/static/img/transparent-logo.png" alt="Logo Sahabat Aqiqah" class="position-fixed h-100 w-40 d-lg-block top-0 {% if request|is_mobile %}w-80 translate-middle-x{% else %}w-40 d-none ms-n9{% endif %} start-50 opacity-2" style="object-fit: contain;">
 </div>
+
+<script>
+(function() {
+    var bellBtn = document.getElementById('reminderDropdown');
+    var bellMenu = document.getElementById('reminder-menu');
+    var body = document.body;
+    var scrollY = 0;
+
+    function isMobile() {
+        return window.innerWidth < 992;
+    }
+
+    function lockScroll() {
+        scrollY = window.scrollY;
+        body.style.position = 'fixed';
+        body.style.top = '-' + scrollY + 'px';
+        body.style.width = '100%';
+    }
+
+    function unlockScroll() {
+        body.style.position = '';
+        body.style.top = '';
+        body.style.width = '';
+        window.scrollTo(0, scrollY);
+    }
+
+    if (bellBtn && bellMenu) {
+        bellBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var isVisible = bellMenu.style.display === 'block';
+            bellMenu.style.display = isVisible ? 'none' : 'block';
+            if (!isVisible && isMobile()) {
+                lockScroll();
+            } else if (isVisible || !isMobile()) {
+                unlockScroll();
+            }
+        });
+        document.addEventListener('click', function(e) {
+            if (bellMenu.style.display === 'block' && !bellMenu.contains(e.target) && !bellBtn.contains(e.target)) {
+                bellMenu.style.display = 'none';
+                if (isMobile()) unlockScroll();
+            }
+        });
+    } else {
+        console.error('Reminder elements not found:', !!bellBtn, !!bellMenu);
+    }
+
+    function fetchReminders() {
+        var sidebarNotifCount = {{ notif }};
+        fetch('/jadwal/reminders/', { credentials: 'same-origin' })
+            .then(function(r) {
+                console.log('Reminder fetch status:', r.status, r.url);
+                if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                return r.json();
+            })
+            .then(function(data) {
+                console.log('Reminder data:', data);
+                var badge = document.getElementById('reminder-badge');
+                var countEl = document.getElementById('reminder-count');
+                var listEl = document.getElementById('reminder-list');
+                var count = data.count || 0;
+
+                if (count > 0) {
+                    badge.classList.remove('d-none');
+                    countEl.textContent = count;
+                } else {
+                    badge.classList.add('d-none');
+                }
+
+                var jadwalBadge = document.getElementById('jadwal-reminder-badge');
+                if (jadwalBadge) {
+                    if (count > 0) {
+                        jadwalBadge.textContent = count;
+                        jadwalBadge.classList.remove('d-none');
+                    } else {
+                        jadwalBadge.classList.add('d-none');
+                    }
+                }
+
+                var showDot = sidebarNotifCount > 0 || count > 0;
+                var hamburgerBadge = document.getElementById('hamburger-badge');
+                var hamburgerMobileBadge = document.getElementById('hamburger-mobile-badge');
+                var transaksiBadge = document.getElementById('transaksi-badge');
+                if (hamburgerBadge) hamburgerBadge.classList.toggle('d-none', !showDot);
+                if (hamburgerMobileBadge) hamburgerMobileBadge.classList.toggle('d-none', !showDot);
+                if (transaksiBadge) transaksiBadge.classList.toggle('d-none', !showDot);
+
+                var reminders = data.reminders || [];
+                if (reminders.length === 0) {
+                    listEl.innerHTML = '<div class="reminder-empty"><i class="fa fa-check-circle me-1"></i>Tidak ada pengingat</div>';
+                    return;
+                }
+
+                var typeConfig = {
+                    'NO_DRIVER':           { icon: 'fa-user-slash',    color: '#fb8c00', bg: 'rgba(251,140,0,.12)' },
+                    'UNSCHEDULED':         { icon: 'fa-calendar-times',color: '#90a4ae', bg: 'rgba(144,164,174,.12)' },
+                    'PACKING_OVERDUE':     { icon: 'fa-box',           color: '#42a5f5', bg: 'rgba(66,165,245,.12)' },
+                    'DELIVERY_OVERDUE':    { icon: 'fa-truck',         color: '#ef5350', bg: 'rgba(239,83,80,.12)' },
+                    'SCHEDULED_OVERDUE':   { icon: 'fa-clock',         color: '#ef5350', bg: 'rgba(239,83,80,.12)' },
+                    'DEPARTURE_SOON':      { icon: 'fa-bell',          color: '#ffa726', bg: 'rgba(255,167,38,.12)' }
+                };
+
+                var html = '';
+                reminders.forEach(function(r) {
+                    var cfg = typeConfig[r.type] || { icon: 'fa-exclamation-triangle', color: '#90a4ae', bg: 'rgba(144,164,174,.12)' };
+                    html += '<a href="/jadwal/" class="reminder-item">';
+                    html += '<div class="reminder-icon" style="background:' + cfg.bg + ';color:' + cfg.color + ';">';
+                    html += '<i class="fas ' + cfg.icon + '"></i>';
+                    html += '</div>';
+                    html += '<div class="reminder-text">' + r.message + '</div>';
+                    html += '</a>';
+                });
+                listEl.innerHTML = html;
+            })
+            .catch(function(err) {
+                console.error('Reminder fetch error:', err);
+                document.getElementById('reminder-badge').classList.add('d-none');
+            });
+    }
+
+    fetchReminders();
+    setInterval(fetchReminders, 300000);
+})();
+</script>
+
+<script>
+(function() {
+  var body = document.body;
+  var overlay = document.getElementById('sidebarOverlay');
+  var mobileToggle = document.getElementById('iconNavbarSidenavMobile');
+  var closeBtn = document.getElementById('mobileSidebarClose');
+
+  function openMobileSidebar() {
+    body.classList.add('mobile-sidebar-open');
+    if (overlay) overlay.classList.add('active');
+    body.style.overflow = 'hidden';
+  }
+
+  function closeMobileSidebar() {
+    body.classList.remove('mobile-sidebar-open');
+    if (overlay) overlay.classList.remove('active');
+    body.style.overflow = '';
+  }
+
+  if (mobileToggle) {
+    mobileToggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (body.classList.contains('mobile-sidebar-open')) {
+        closeMobileSidebar();
+      } else {
+        openMobileSidebar();
+      }
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMobileSidebar();
+    });
+  }
+
+  if (overlay) {
+    overlay.addEventListener('click', function() {
+      closeMobileSidebar();
+    });
+  }
+})();
+</script>
 
 {{ redirect_to_login_immediately }}

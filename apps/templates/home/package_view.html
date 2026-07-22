@@ -50,7 +50,7 @@
                     <div class="card-body">
                         <div class="pl-lg-0">
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.package_name.label_tag }}{{ form.package_name }}
                                         <div class="text-danger text-sm">
@@ -58,7 +58,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.category.label_tag }}
                                         <select name="category" class="form-control form-select-sm" {% if crud == 'view' %}disabled{% endif %}>
@@ -72,8 +72,6 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="row">
                                 <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.male_price.label_tag }}{{ form.male_price }}
@@ -90,7 +88,9 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-2">
+                            </div>
+                            <div class="row">
+                                <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.box.label_tag }}{{ form.box }}
                                         <div class="text-sm text-danger">
@@ -110,12 +110,40 @@
                                     <div class="shadow-none">
                                         {{ form.type.label_tag }}
                                         <select name="type" class="form-control form-select-sm" {% if crud == 'view' %}disabled{% endif %}>
-                                            <option value="">-- Pilih Jenis Kambing --</option>
+                                            <option value="">-- Pilih --</option>
                                             <option value="Jantan" {% if data.type == 'Jantan' %}selected{% endif %}>Jantan</option>
                                             <option value="Betina" {% if data.type == 'Betina' %}selected{% endif %}>Betina</option>
                                         </select>
                                         <div class="text-sm text-danger">
                                             {{ form.type.errors }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="shadow-none">
+                                        {{ form.goat_type.label_tag }}
+                                        <select name="goat_type" class="form-control form-select-sm" {% if crud == 'view' %}disabled{% endif %}>
+                                            <option value="">-- Pilih --</option>
+                                            {% for item in goat_types %}
+                                            <option value="{{ item.goat_type_id }}" {% if form.goat_type.value == item.goat_type_id|stringformat:"s" %}selected{% endif %}>{{ item.goat_type_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="text-sm text-danger">
+                                            {{ form.goat_type.errors }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="shadow-none">
+                                        {{ form.dashboard.label_tag }}
+                                        <select name="dashboard" class="form-control form-select-sm" {% if crud == 'view' %}disabled{% endif %}>
+                                            <option value="">-- Pilih --</option>
+                                            {% for item in dashboards %}
+                                            <option value="{{ item.dashboard_id }}" {% if form.dashboard.value == item.dashboard_id|stringformat:"s" %}selected{% endif %}>{{ item.dashboard_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="text-sm text-danger">
+                                            {{ form.dashboard.errors }}
                                         </div>
                                     </div>
                                 </div>
@@ -231,9 +259,10 @@
                             <div class="table-responsive p-0">
                                 <table class="table {% if crud == 'view' %}hover{% endif %} align-items-center mb-0" id="tabTable">
                                     <thead>
-                                        <tr>
+                                         <tr>
                                             <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
                                                 Nama Menu</th>
+                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Porsi/Tusuk</th>
                                             <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Biaya Tambahan</th>
                                             <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Default</th>
                                             <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2"></th>
@@ -246,6 +275,13 @@
                                                 <div class="d-flex pe-2 py-0">
                                                     <div class="d-flex flex-column justify-content-center">
                                                         <h6 class="mb-0 text-sm">{{ item.cuisine.cuisine_name }}</h6>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex pe-2 py-0">
+                                                    <div class="d-flex flex-column justify-content-center">
+                                                        <h6 class="mb-0 text-sm">{{ item.porsi }}</h6>
                                                     </div>
                                                 </div>
                                             </td>
@@ -292,6 +328,14 @@
                                                         {% csrf_token %}
                                                         <div class="modal-body border-bottom-0">
                                                             <div class="pl-lg-0">
+                                                                <div class="row">
+                                                                    <div class="col-md-12">
+                                                                        <div class="form-group shadow-none">
+                                                                            <label class="form-control-label" for="porsi">Porsi/Tusuk</label>
+                                                                            <input type="number" class="form-control-sm" name="porsi" value="{{ item.porsi }}"/>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                                 <div class="row">
                                                                     <div class="col-md-12">
                                                                         <div class="form-group shadow-none">
@@ -381,11 +425,12 @@
                         </div>
                         <div class="card-body px-0 pt-0 pb-2">
                             <div class="table-responsive p-0">
-                                <table class="table {% if crud == 'view' %}hover{% endif %} align-items-center mb-0" id="tabTable2">
+                                 <table class="table {% if crud == 'view' %}hover{% endif %} align-items-center mb-0" id="tabTable2">
                                     <thead>
                                         <tr>
                                             <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
                                                 Nama Menu</th>
+                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Porsi/Tusuk</th>
                                             <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Biaya Tambahan</th>
                                             <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Default</th>
                                             <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2"></th>
@@ -398,6 +443,13 @@
                                                 <div class="d-flex pe-2 py-0">
                                                     <div class="d-flex flex-column justify-content-center">
                                                         <h6 class="mb-0 text-sm">{{ item.cuisine.cuisine_name }}</h6>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex pe-2 py-0">
+                                                    <div class="d-flex flex-column justify-content-center">
+                                                        <h6 class="mb-0 text-sm">{{ item.porsi }}</h6>
                                                     </div>
                                                 </div>
                                             </td>
@@ -444,6 +496,14 @@
                                                         {% csrf_token %}
                                                         <div class="modal-body border-bottom-0">
                                                             <div class="pl-lg-0">
+                                                                <div class="row">
+                                                                    <div class="col-md-12">
+                                                                        <div class="form-group shadow-none">
+                                                                            <label class="form-control-label" for="porsi">Porsi/Tusuk</label>
+                                                                            <input type="number" class="form-control-sm" name="porsi" value="{{ item.porsi }}"/>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                                 <div class="row">
                                                                     <div class="col-md-12">
                                                                         <div class="form-group shadow-none">

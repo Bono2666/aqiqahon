@@ -25,6 +25,7 @@
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">ID Pelengkap
                                     </th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Nama Pelengkap</th>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Tipe</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -39,6 +40,9 @@
                                     </td>
                                     <td>
                                         <h6 class="mb-0 text-sm">{{ item.equipment_name }}</h6>                   
+                                    </td>
+                                    <td>
+                                        <h6 class="mb-0 text-sm">{{ item.get_tipe_display }}</h6>
                                     </td>
                                 </tr>
                                 {% endfor %}

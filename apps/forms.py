@@ -169,58 +169,6 @@ class FormSetPassword(SetPasswordForm):
             {'class': 'form-control-sm'})
 
 
-class FormDistributor(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormDistributor, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['distributor_id'].label = 'Distributor ID'
-        self.fields['distributor_name'].label = 'Distributor Name'
-        self.fields['sap_code'].label = 'SAP ID'
-        self.fields['distributor_id'].widget = forms.TextInput(
-            {'class': 'form-control-sm text-uppercase'})
-        self.fields['distributor_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm'})
-        self.fields['sap_code'].widget = forms.TextInput(
-            {'class': 'form-control-sm'})
-
-    class Meta:
-        model = Distributor
-        exclude = ['entry_date', 'entry_by', 'update_date', 'update_by']
-
-
-class FormDistributorView(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormDistributorView, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['distributor_name'].label = 'Distributor Name'
-        self.fields['sap_code'].label = 'SAP ID'
-        self.fields['distributor_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm', 'readonly': 'readonly'})
-        self.fields['sap_code'].widget = forms.TextInput(
-            {'class': 'form-control-sm', 'readonly': 'readonly'})
-
-    class Meta:
-        model = Distributor
-        fields = ['distributor_id', 'distributor_name', 'sap_code']
-
-
-class FormDistributorUpdate(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormDistributorUpdate, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['distributor_name'].label = 'Distributor Name'
-        self.fields['sap_code'].label = 'SAP ID'
-        self.fields['distributor_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm'})
-        self.fields['sap_code'].widget = forms.TextInput(
-            {'class': 'form-control-sm'})
-
-    class Meta:
-        model = Distributor
-        exclude = ['distributor_id', 'entry_date',
-                   'entry_by', 'update_date', 'update_by']
-
-
 class FormPromo(ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormPromo, self).__init__(*args, **kwargs)
@@ -377,17 +325,6 @@ class FormAreaSalesUpdate(ModelForm):
                    'entry_by', 'update_date', 'update_by']
 
 
-class FormAreaChannel(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormAreaChannel, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-
-    class Meta:
-        model = AreaChannel
-        exclude = ['entry_date',
-                   'entry_by', 'update_date', 'update_by']
-
-
 class FormPosition(ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormPosition, self).__init__(*args, **kwargs)
@@ -500,49 +437,6 @@ class FormAuthUpdate(ModelForm):
                    'entry_by', 'update_date', 'update_by']
 
 
-class FormChannel(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormChannel, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['channel_id'].label = 'Channel ID'
-        self.fields['channel_name'].label = 'Channel Name'
-        self.fields['channel_id'].widget = forms.TextInput(
-            {'class': 'form-control-sm text-uppercase'})
-        self.fields['channel_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm'})
-
-    class Meta:
-        model = Channel
-        exclude = ['entry_date', 'entry_by', 'update_date', 'update_by']
-
-
-class FormChannelUpdate(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormChannelUpdate, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['channel_name'].label = 'Channel Name'
-        self.fields['channel_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm'})
-
-    class Meta:
-        model = Channel
-        exclude = ['channel_id', 'entry_date',
-                   'entry_by', 'update_date', 'update_by']
-
-
-class FormChannelView(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormChannelView, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['channel_name'].label = 'Channel Name'
-        self.fields['channel_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm', 'readonly': 'readonly'})
-
-    class Meta:
-        model = Channel
-        fields = ['channel_id', 'channel_name']
-
-
 class FormCuisine(ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormCuisine, self).__init__(*args, **kwargs)
@@ -592,10 +486,13 @@ class FormEquipment(ModelForm):
         self.label_suffix = ''
         self.fields['equipment_id'].label = 'ID Pelengkap'
         self.fields['equipment_name'].label = 'Nama Pelengkap'
+        self.fields['tipe'].label = 'Tipe Pelengkap'
         self.fields['equipment_id'].widget = forms.TextInput(
             {'class': 'form-control-sm text-uppercase'})
         self.fields['equipment_name'].widget = forms.TextInput(
             {'class': 'form-control-sm'})
+        self.fields['tipe'].widget.attrs.update(
+            {'class': 'form-control form-select-sm'})
 
     class Meta:
         model = Equipment
@@ -607,8 +504,11 @@ class FormEquipmentUpdate(ModelForm):
         super(FormEquipmentUpdate, self).__init__(*args, **kwargs)
         self.label_suffix = ''
         self.fields['equipment_name'].label = 'Nama Pelengkap'
+        self.fields['tipe'].label = 'Tipe Pelengkap'
         self.fields['equipment_name'].widget = forms.TextInput(
             {'class': 'form-control-sm'})
+        self.fields['tipe'].widget.attrs.update(
+            {'class': 'form-control form-select-sm'})
 
     class Meta:
         model = Equipment
@@ -621,12 +521,15 @@ class FormEquipmentView(ModelForm):
         super(FormEquipmentView, self).__init__(*args, **kwargs)
         self.label_suffix = ''
         self.fields['equipment_name'].label = 'Nama Pelengkap'
+        self.fields['tipe'].label = 'Tipe Pelengkap'
         self.fields['equipment_name'].widget = forms.TextInput(
             {'class': 'form-control-sm', 'readonly': 'readonly'})
+        self.fields['tipe'].widget.attrs.update(
+            {'class': 'form-control form-select-sm', 'disabled': 'disabled'})
 
     class Meta:
         model = Equipment
-        fields = ['equipment_id', 'equipment_name']
+        fields = ['equipment_id', 'equipment_name', 'tipe']
 
 
 class FormCategory(ModelForm):
@@ -671,6 +574,108 @@ class FormCategoryView(ModelForm):
         fields = ['category_id', 'category_name']
 
 
+class FormGoatType(ModelForm):
+    def __init__(self, *args, **kwargs):
+        super(FormGoatType, self).__init__(*args, **kwargs)
+        self.label_suffix = ''
+        self.fields['goat_type_id'].label = 'Kode Jenis'
+        self.fields['goat_type_name'].label = 'Nama Jenis'
+        self.fields['display_order'].label = 'Urutan'
+        self.fields['goat_type_id'].widget = forms.TextInput(
+            {'class': 'form-control-sm text-uppercase'})
+        self.fields['goat_type_name'].widget = forms.TextInput(
+            {'class': 'form-control-sm'})
+        self.fields['display_order'].widget = forms.NumberInput(
+            {'class': 'form-control-sm no-spinners'})
+
+    class Meta:
+        model = GoatType
+        fields = ['goat_type_id', 'goat_type_name', 'display_order']
+
+
+class FormGoatTypeUpdate(ModelForm):
+    def __init__(self, *args, **kwargs):
+        super(FormGoatTypeUpdate, self).__init__(*args, **kwargs)
+        self.label_suffix = ''
+        self.fields['goat_type_name'].label = 'Nama Jenis'
+        self.fields['display_order'].label = 'Urutan'
+        self.fields['goat_type_name'].widget = forms.TextInput(
+            {'class': 'form-control-sm'})
+        self.fields['display_order'].widget = forms.NumberInput(
+            {'class': 'form-control-sm no-spinners'})
+
+    class Meta:
+        model = GoatType
+        fields = ['goat_type_name', 'display_order']
+
+
+class FormGoatTypeView(ModelForm):
+    def __init__(self, *args, **kwargs):
+        super(FormGoatTypeView, self).__init__(*args, **kwargs)
+        self.label_suffix = ''
+        self.fields['goat_type_name'].label = 'Nama Jenis'
+        self.fields['display_order'].label = 'Urutan'
+        self.fields['goat_type_name'].widget = forms.TextInput(
+            {'class': 'form-control-sm', 'readonly': 'readonly'})
+        self.fields['display_order'].widget = forms.NumberInput(
+            {'class': 'form-control-sm no-spinners', 'readonly': 'readonly'})
+
+    class Meta:
+        model = GoatType
+        fields = ['goat_type_id', 'goat_type_name', 'display_order']
+
+
+class FormDashboard(ModelForm):
+    def __init__(self, *args, **kwargs):
+        super(FormDashboard, self).__init__(*args, **kwargs)
+        self.label_suffix = ''
+        self.fields['dashboard_id'].label = 'Kode Dashboard'
+        self.fields['dashboard_name'].label = 'Nama Dashboard'
+        self.fields['display_order'].label = 'Urutan'
+        self.fields['dashboard_id'].widget = forms.TextInput(
+            {'class': 'form-control-sm text-uppercase'})
+        self.fields['dashboard_name'].widget = forms.TextInput(
+            {'class': 'form-control-sm'})
+        self.fields['display_order'].widget = forms.NumberInput(
+            {'class': 'form-control-sm no-spinners'})
+
+    class Meta:
+        model = Dashboard
+        fields = ['dashboard_id', 'dashboard_name', 'display_order']
+
+
+class FormDashboardUpdate(ModelForm):
+    def __init__(self, *args, **kwargs):
+        super(FormDashboardUpdate, self).__init__(*args, **kwargs)
+        self.label_suffix = ''
+        self.fields['dashboard_name'].label = 'Nama Dashboard'
+        self.fields['display_order'].label = 'Urutan'
+        self.fields['dashboard_name'].widget = forms.TextInput(
+            {'class': 'form-control-sm'})
+        self.fields['display_order'].widget = forms.NumberInput(
+            {'class': 'form-control-sm no-spinners'})
+
+    class Meta:
+        model = Dashboard
+        fields = ['dashboard_name', 'display_order']
+
+
+class FormDashboardView(ModelForm):
+    def __init__(self, *args, **kwargs):
+        super(FormDashboardView, self).__init__(*args, **kwargs)
+        self.label_suffix = ''
+        self.fields['dashboard_name'].label = 'Nama Dashboard'
+        self.fields['display_order'].label = 'Urutan'
+        self.fields['dashboard_name'].widget = forms.TextInput(
+            {'class': 'form-control-sm', 'readonly': 'readonly'})
+        self.fields['display_order'].widget = forms.NumberInput(
+            {'class': 'form-control-sm no-spinners', 'readonly': 'readonly'})
+
+    class Meta:
+        model = Dashboard
+        fields = ['dashboard_id', 'dashboard_name', 'display_order']
+
+
 class FormPackage(ModelForm):
     def __init__(self, *args, **kwargs):
         super(FormPackage, self).__init__(*args, **kwargs)
@@ -683,6 +688,8 @@ class FormPackage(ModelForm):
         self.fields['box'].label = 'Jumlah Box'
         self.fields['quantity'].label = 'Jumlah Kambing'
         self.fields['type'].label = 'Tipe Kambing'
+        self.fields['goat_type'].label = 'Jenis Kambing'
+        self.fields['dashboard'].label = 'Dashboard'
         self.fields['package_id'].widget = forms.TextInput(
             {'class': 'form-control-sm text-uppercase'})
         self.fields['package_name'].widget = forms.TextInput(
@@ -712,6 +719,8 @@ class FormPackageUpdate(ModelForm):
         self.fields['box'].label = 'Jumlah Box'
         self.fields['quantity'].label = 'Jumlah Kambing'
         self.fields['type'].label = 'Tipe Kambing'
+        self.fields['goat_type'].label = 'Jenis Kambing'
+        self.fields['dashboard'].label = 'Dashboard'
         self.fields['package_name'].widget = forms.TextInput(
             {'class': 'form-control-sm'})
         self.fields['male_price'].widget = forms.NumberInput(
@@ -740,6 +749,8 @@ class FormPackageView(ModelForm):
         self.fields['box'].label = 'Jumlah Box'
         self.fields['quantity'].label = 'Jumlah Kambing'
         self.fields['type'].label = 'Tipe Kambing'
+        self.fields['goat_type'].label = 'Jenis Kambing'
+        self.fields['dashboard'].label = 'Dashboard'
         self.fields['package_name'].widget = forms.TextInput(
             {'class': 'form-control-sm', 'readonly': 'readonly'})
         self.fields['male_price'].widget = forms.TextInput(
@@ -754,270 +765,11 @@ class FormPackageView(ModelForm):
     class Meta:
         model = Package
         fields = ['package_id', 'package_name', 'category',
-                  'male_price', 'female_price', 'box', 'quantity', 'type']
-
-
-class FormProposalMatrix(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormProposalMatrix, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-
-    class Meta:
-        model = ProposalMatrix
-        exclude = ['entry_date', 'entry_by', 'update_date', 'update_by']
-
-
-class FormClosing(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormClosing, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['document'].label = 'Document'
-        self.fields['year_closed'].label = 'Year Closed'
-        self.fields['month_closed'].label = 'Month Closed'
-        self.fields['year_open'].label = 'Year Open'
-        self.fields['month_open'].label = 'Month Open'
-        self.fields['document'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm text-uppercase'})
-
-    class Meta:
-        model = Closing
-        exclude = ['entry_date', 'entry_by', 'update_date', 'update_by']
-
-        YEAR_CHOICES = []
-        for r in range((datetime.datetime.now().year-1), (datetime.datetime.now().year+2)):
-            YEAR_CHOICES.append((r, r))
-
-        MONTH_CHOICES = []
-        for r in range(1, 13):
-            MONTH_CHOICES.append((r, r))
-
-        widgets = {
-            'year_closed': forms.Select(choices=YEAR_CHOICES, attrs={'class': 'form-control form-select-sm'}),
-            'month_closed': forms.Select(choices=MONTH_CHOICES, attrs={'class': 'form-control form-select-sm'}),
-            'year_open': forms.Select(choices=YEAR_CHOICES, attrs={'class': 'form-control form-select-sm'}),
-            'month_open': forms.Select(choices=MONTH_CHOICES, attrs={'class': 'form-control form-select-sm'}),
-        }
-
-
-class FormClosingUpdate(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormClosingUpdate, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['year_closed'].label = 'Year Closed'
-        self.fields['month_closed'].label = 'Month Closed'
-        self.fields['year_open'].label = 'Year Open'
-        self.fields['month_open'].label = 'Month Open'
-        self.fields['year_closed'].widget = forms.Select(
-            attrs={'class': 'form-control form-select-sm'})
-        self.fields['month_closed'].widget = forms.Select(
-            attrs={'class': 'form-control form-select-sm'})
-        self.fields['year_open'].widget = forms.Select(
-            attrs={'class': 'form-control form-select-sm'})
-        self.fields['month_open'].widget = forms.Select(
-            attrs={'class': 'form-control form-select-sm'})
-
-    class Meta:
-        model = Closing
-        exclude = ['document', 'entry_date',
-                   'entry_by', 'update_date', 'update_by']
-
-    YEAR_CHOICES = []
-    for r in range((datetime.datetime.now().year-1), (datetime.datetime.now().year+2)):
-        YEAR_CHOICES.append((r, r))
-
-    MONTH_CHOICES = []
-    for r in range(1, 13):
-        MONTH_CHOICES.append((r, r))
-
-    widgets = {
-        'year_closed': forms.Select(choices=YEAR_CHOICES, attrs={'class': 'form-control form-select-sm'}),
-        'month_closed': forms.Select(choices=MONTH_CHOICES, attrs={'class': 'form-control form-select-sm'}),
-        'year_open': forms.Select(choices=YEAR_CHOICES, attrs={'class': 'form-control form-select-sm'}),
-        'month_open': forms.Select(choices=MONTH_CHOICES, attrs={'class': 'form-control form-select-sm'}),
-    }
-
-
-class FormClosingView(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormClosingView, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['document'].label = 'Document'
-        self.fields['year_closed'].label = 'Year Closed'
-        self.fields['month_closed'].label = 'Month Closed'
-        self.fields['year_open'].label = 'Year Open'
-        self.fields['month_open'].label = 'Month Open'
-        self.fields['document'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm text-uppercase', 'readonly': 'readonly'})
-        self.fields['year_closed'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm', 'readonly': 'readonly'})
-        self.fields['month_closed'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm', 'readonly': 'readonly'})
-        self.fields['year_open'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm', 'readonly': 'readonly'})
-        self.fields['month_open'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm', 'readonly': 'readonly'})
-
-    class Meta:
-        model = Closing
-        fields = ['document', 'year_closed', 'month_closed',
-                  'year_open', 'month_open']
-
-
-class FormDivision(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormDivision, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['division_name'].label = 'Division Name'
-        self.fields['division_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm'})
-
-    class Meta:
-        model = Division
-        exclude = ['division_id', 'entry_date',
-                   'entry_by', 'update_date', 'update_by']
-
-
-class FormDivisionUpdate(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormDivisionUpdate, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['division_name'].label = 'Division Name'
-        self.fields['division_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm'})
-
-    class Meta:
-        model = Division
-        exclude = ['division_id', 'entry_date',
-                   'entry_by', 'update_date', 'update_by']
-
-
-class FormDivisionView(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormDivisionView, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['division_name'].label = 'Division Name'
-        self.fields['division_name'].widget = forms.TextInput(
-            {'class': 'form-control-sm', 'readonly': 'readonly'})
-
-    class Meta:
-        model = Division
-        fields = ['division_id', 'division_name']
+                  'male_price', 'female_price', 'box', 'quantity', 'type', 'goat_type', 'dashboard']
 
 
 class DateInput(forms.DateInput):
     input_type = 'date'
-
-
-class FormClaim(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormClaim, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['claim_id'].widget = forms.TextInput(
-            attrs={'class': 'd-none'})
-        self.fields['claim_date'].label = 'Date'
-        self.fields['claim_date'].widget = forms.DateInput(
-            attrs={'class': 'form-control-sm', 'readonly': 'readonly'})
-        self.fields['claim_date'].input_formats = ['%d/%m/%Y']
-        self.fields['claim_date'].initial = datetime.date.today().strftime(
-            '%d/%m/%Y')
-        self.fields['area'].widget = forms.TextInput(
-            attrs={'class': 'd-none'})
-        self.fields['invoice'].label = 'Invoice No.'
-        self.fields['invoice'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm'})
-        self.fields['invoice_date'].label = 'Invoice Date'
-        self.fields['due_date'].label = 'Due Date'
-        self.fields['amount'].label = 'Amount'
-        self.fields['amount'].widget = forms.NumberInput(
-            attrs={'class': 'form-control-sm no-spinners'})
-        self.fields['remarks'].label = 'Remarks'
-        self.fields['remarks'].required = False
-        self.fields['additional_proposal'].label = 'Additional Proposal'
-        self.fields['additional_proposal'].required = False
-
-    class Meta:
-        model = Claim
-        exclude = ['program', 'status', 'tax', 'total', 'total_claim', 'seq_number', 'entry_pos', 'entry_date', 'additional_amount',
-                   'entry_by', 'update_date', 'update_by']
-
-        widgets = {
-            'remarks': forms.Textarea(attrs={'class': 'form-control-sm', 'rows': 3}),
-            'invoice_date': DateInput(attrs={'class': 'form-control form-control-sm', 'data-provide': 'datepicker', 'data-date-format': 'dd/mm/yyyy'}),
-            'due_date': DateInput(attrs={'class': 'form-control form-control-sm', 'data-provide': 'datepicker', 'data-date-format': 'dd/mm/yyyy'}),
-        }
-
-
-class FormClaimView(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormClaimView, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['area'].widget = forms.TextInput(
-            attrs={'class': 'd-none'})
-        self.fields['claim_date'].label = 'Date'
-        self.fields['invoice'].label = 'Invoice No.'
-        self.fields['invoice'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm', 'readonly': 'readonly'})
-        self.fields['invoice_date'].label = 'Invoice Date'
-        self.fields['due_date'].label = 'Due Date'
-        self.fields['amount'].label = 'Amount'
-        self.fields['amount'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm', 'readonly': 'readonly'})
-        self.fields['tax'].label = 'Tax'
-        self.fields['tax'].widget = forms.NumberInput(
-            attrs={'class': 'form-control-sm no-spinners', 'readonly': 'readonly'})
-        self.fields['total'].label = 'Total'
-        self.fields['total'].widget = forms.NumberInput(
-            attrs={'class': 'form-control-sm no-spinners', 'readonly': 'readonly'})
-        self.fields['additional_proposal'].label = 'Additional Proposal'
-        self.fields['additional_amount'].label = 'Additional Amount'
-        self.fields['remarks'].label = 'Remarks'
-
-    class Meta:
-        model = Claim
-        exclude = ['claim_id', 'proposal', 'program', 'status', 'seq_number', 'entry_date',
-                   'entry_by', 'update_date', 'update_by']
-
-        widgets = {
-            'remarks': forms.Textarea(attrs={'class': 'form-control-sm', 'rows': 3, 'readonly': 'readonly'}),
-            'claim_date': DateInput(attrs={'class': 'form-control form-control-sm', 'readonly': 'readonly'}),
-            'invoice_date': DateInput(attrs={'class': 'form-control form-control-sm', 'readonly': 'readonly'}),
-            'due_date': DateInput(attrs={'class': 'form-control form-control-sm', 'readonly': 'readonly'}),
-        }
-
-
-class FormClaimUpdate(ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(FormClaimUpdate, self).__init__(*args, **kwargs)
-        self.label_suffix = ''
-        self.fields['area'].widget = forms.TextInput(
-            attrs={'class': 'd-none'})
-        self.fields['claim_date'].label = 'Date'
-        self.fields['claim_date'].widget = forms.DateInput(
-            attrs={'class': 'form-control-sm', 'readonly': 'readonly'})
-        self.fields['claim_date'].input_formats = ['%d/%m/%Y']
-        self.fields['invoice'].label = 'Invoice No.'
-        self.fields['invoice'].widget = forms.TextInput(
-            attrs={'class': 'form-control-sm'})
-        self.fields['invoice_date'].label = 'Invoice Date'
-        self.fields['due_date'].label = 'Due Date'
-        self.fields['amount'].label = 'Amount'
-        self.fields['amount'].widget = forms.NumberInput(
-            attrs={'class': 'form-control-sm no-spinners'})
-        self.fields['remarks'].label = 'Remarks'
-        self.fields['remarks'].required = False
-        self.fields['additional_proposal'].label = 'Additional Proposal'
-        self.fields['additional_proposal'].required = False
-
-    class Meta:
-        model = Claim
-        exclude = ['claim_id', 'proposal', 'program', 'status', 'tax', 'total', 'total_claim', 'seq_number', 'entry_pos', 'entry_date', 'additional_amount',
-                   'entry_by', 'update_date', 'update_by']
-
-        widgets = {
-            'remarks': forms.Textarea(attrs={'class': 'form-control-sm', 'rows': 3}),
-            'invoice_date': DateInput(attrs={'class': 'form-control form-control-sm'}),
-            'due_date': DateInput(attrs={'class': 'form-control form-control-sm'}),
-        }
 
 
 class FormRegion(ModelForm):

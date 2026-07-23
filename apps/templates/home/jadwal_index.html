@@ -130,7 +130,86 @@
         background-color: #404B69 !important;
         border: 1px solid rgba(255, 255, 255, 0.15) !important;
     }
-    body.dark-page #filter-branch,
+    /* Branch dropdown */
+    .branch-dropdown { position: relative; }
+    .branch-dropdown .dropdown-menu {
+        display: none !important;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 1050;
+        background: #fff;
+        border: 1px solid #d2d6da;
+        border-radius: 0.5rem;
+        padding: 0.5rem;
+        max-height: 300px;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transform: none !important;
+        overflow-y: auto;
+        min-width: 200px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-top: 0.25rem;
+    }
+    .branch-dropdown.open .dropdown-menu { display: block !important; }
+    .branch-dropdown .dropdown-item {
+        padding: 0.35rem 0.5rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        font-size: 0.75rem;
+    }
+    .branch-dropdown .dropdown-item:hover { background-color: #f0f0f0; }
+    .branch-dropdown .dropdown-divider { margin: 0.3rem 0; border-top: 1px solid #e9ecef; }
+    .branch-checkbox {
+        width: 1em;
+        height: 1em;
+        margin-right: 0.5rem;
+        vertical-align: middle;
+        accent-color: #343a40;
+        cursor: pointer;
+    }
+    .branch-display {
+        background-color: #fff;
+        border: 1px solid #d2d6da;
+        border-radius: 0.5rem;
+        padding: 0.25rem 0.75rem;
+        padding-right: 2.5rem;
+        min-height: calc(0.45em + 1.25rem + 5px);
+        display: flex;
+        align-items: center;
+        position: relative;
+        cursor: pointer;
+        font-size: 0.75rem;
+        color: #495057;
+        user-select: none;
+        transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+    }
+    .branch-display:hover { border-color: #adb5bd; }
+    .branch-display:focus-within { border-color: #F6B40E; box-shadow: 0 0 0 2px #F6B40E; }
+    .branch-arrow {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        background: transparent;
+        color: #6c757d;
+        border-radius: 0 0.5rem 0.5rem 0;
+        cursor: pointer;
+    }
+    .branch-arrow i { font-size: 0.625rem; }
+    body.dark-page .branch-dropdown .dropdown-menu { background: #404B69; border-color: #525f7f; }
+    body.dark-page .branch-dropdown .dropdown-item { color: #d7d7d7; }
+    body.dark-page .branch-dropdown .dropdown-item:hover { background-color: #2c3553; }
+    body.dark-page .branch-dropdown .dropdown-divider { border-top-color: #525f7f; }
+    body.dark-page .branch-checkbox { accent-color: #8994c7; }
+    body.dark-page .branch-display { background-color: #404B69; color: #d7d7d7; border-color: #525f7f; }
+    body.dark-page .branch-display:focus-within { border-color: #8994c7; box-shadow: 0 0 0 2px #8994c7; }
+    body.dark-page .branch-arrow { color: #adb5bd; }
     body.dark-page #filter-status {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg fill='none'%3E%3Cpath d='M3.87 6.49l-1.77 1.77 9.9 9.9 9.9-9.9-1.77-1.77-8.13 8.13-8.13-8.13z' fill='%23F7F7F7'%3E%3C/path%3E%3C/g%3E%3C/svg%3E") !important;
         background-repeat: no-repeat !important;
@@ -184,13 +263,26 @@
                     <div class="{% if request|is_mobile %}col-12 mb-3{% else %}col-4{% endif %} d-flex align-items-center">
                         <h4 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Jadwal Pesanan</h4>
                     </div>
-                    <div class="{% if request|is_mobile %}col-6 mb-2{% else %}col-2{% endif %}">
-                        <select id="filter-branch" class="form-select form-select-sm">
-                            <option value="all">Semua Cabang</option>
-                            {% for area in areas %}
-                            <option value="{{ area.area_id }}">{{ area.area_name }}</option>
-                            {% endfor %}
-                        </select>
+                    <div class="{% if request|is_mobile %}col-6 mb-2{% else %}col-2{% endif %}" style="position:relative; z-index:1040;">
+                        <div class="branch-dropdown" id="branchDropdownWrapper">
+                            <div class="branch-display" id="branchDropdown">
+                                <span id="branchText">Semua Cabang</span>
+                                <span class="branch-arrow" id="branchArrow"><i class="fas fa-angle-down"></i></span>
+                            </div>
+                            <div class="dropdown-menu" id="branchMenu">
+                                <div class="dropdown-item">
+                                    <input type="checkbox" class="branch-checkbox" value="all" id="branchAll" checked>
+                                    <strong>Semua Cabang</strong>
+                                </div>
+                                <div class="dropdown-divider"></div>
+                                {% for area in areas %}
+                                <div class="dropdown-item">
+                                    <input type="checkbox" class="branch-checkbox" value="{{ area.area_id }}">
+                                    {{ area.area_name }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                     <div class="{% if request|is_mobile %}col-6 mb-2{% else %}col-2{% endif %}">
                         <select id="filter-status" class="form-select form-select-sm">
@@ -288,13 +380,26 @@ document.addEventListener('DOMContentLoaded', function() {
         var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
         var startStr = s.getFullYear() + '-' + pad(s.getMonth() + 1) + '-' + pad(s.getDate());
         var endStr = e.getFullYear() + '-' + pad(e.getMonth() + 1) + '-' + pad(e.getDate());
-        var params = new URLSearchParams({
-            start: startStr,
-            end: endStr,
-            branch: document.getElementById('filter-branch').value,
-            status: document.getElementById('filter-status').value,
-            driver: document.getElementById('filter-driver').value
-        });
+        var params = new URLSearchParams();
+        params.append('start', startStr);
+        params.append('end', endStr);
+        var allCheck = document.getElementById('branchAll');
+        var branchChecks = document.querySelectorAll('.branch-checkbox:not(#branchAll)');
+        var anyChecked = false;
+        for (var i = 0; i < branchChecks.length; i++) {
+            if (branchChecks[i].checked) { anyChecked = true; break; }
+        }
+        if (allCheck.checked || !anyChecked) {
+            params.append('branch', 'all');
+        } else {
+            for (var i = 0; i < branchChecks.length; i++) {
+                if (branchChecks[i].checked) {
+                    params.append('branch', branchChecks[i].value);
+                }
+            }
+        }
+        params.append('status', document.getElementById('filter-status').value);
+        params.append('driver', document.getElementById('filter-driver').value);
         var url = "{% url 'jadwal-events' %}?" + params.toString();
         console.log('[JADWAL] Fetching events:', url);
         fetch(url)
@@ -319,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var calendar = new FullCalendar.Calendar(calendarEl, {
         locale: 'id',
-        initialView: window.innerWidth < 992 ? 'timeGridDay' : 'dayGridMonth',
+        initialView: 'timeGridDay',
         eventTimeFormat: {
             hour: '2-digit',
             minute: '2-digit',
@@ -644,9 +749,94 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
 
-    document.getElementById('filter-branch').addEventListener('change', function() {
+    // Branch dropdown logic
+    var branchWrapper = document.getElementById('branchDropdownWrapper');
+    var branchDisplay = document.getElementById('branchDropdown');
+    var branchArrow = document.getElementById('branchArrow');
+    var branchMenu = document.getElementById('branchMenu');
+    var branchAll = document.getElementById('branchAll');
+    var branchChecks = document.querySelectorAll('.branch-checkbox:not(#branchAll)');
+    var branchText = document.getElementById('branchText');
+
+    function toggleBranchMenu(show) {
+        if (show) {
+            branchWrapper.classList.add('open');
+            branchMenu.classList.add('show');
+            branchMenu.style.setProperty('display', 'block', 'important');
+            branchMenu.style.setProperty('opacity', '1', 'important');
+            branchMenu.style.setProperty('pointer-events', 'auto', 'important');
+            branchMenu.style.setProperty('visibility', 'visible', 'important');
+            branchMenu.style.removeProperty('transform');
+        } else {
+            branchWrapper.classList.remove('open');
+            branchMenu.classList.remove('show');
+            branchMenu.style.removeProperty('display');
+            branchMenu.style.removeProperty('opacity');
+            branchMenu.style.removeProperty('pointer-events');
+            branchMenu.style.removeProperty('visibility');
+            branchMenu.style.removeProperty('transform');
+        }
+    }
+
+    branchDisplay.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleBranchMenu(!branchWrapper.classList.contains('open'));
+    });
+    branchArrow.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleBranchMenu(!branchWrapper.classList.contains('open'));
+    });
+    branchMenu.addEventListener('click', function(e) { e.stopPropagation(); });
+    document.addEventListener('click', function() { toggleBranchMenu(false); });
+
+    var branchDropdownItems = branchMenu.querySelectorAll('.dropdown-item');
+    for (var k = 0; k < branchDropdownItems.length; k++) {
+        branchDropdownItems[k].addEventListener('click', function(e) {
+            if (e.target.tagName !== 'INPUT') {
+                var cb = this.querySelector('input[type="checkbox"]');
+                if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
+            }
+        });
+    }
+
+    function updateBranchDisplay() {
+        var allChecked = branchAll.checked;
+        var checked = [];
+        for (var i = 0; i < branchChecks.length; i++) {
+            if (branchChecks[i].checked) checked.push(branchChecks[i]);
+        }
+        if (allChecked) {
+            branchText.textContent = 'Semua Cabang';
+        } else if (checked.length === 0) {
+            branchText.textContent = 'Pilih Cabang';
+        } else if (checked.length === 1) {
+            branchText.textContent = checked[0].nextSibling.textContent.trim();
+        } else {
+            branchText.textContent = checked.length + ' cabang dipilih';
+        }
+    }
+
+    branchAll.addEventListener('change', function() {
+        for (var i = 0; i < branchChecks.length; i++) {
+            branchChecks[i].checked = branchAll.checked;
+        }
+        updateBranchDisplay();
         loadCalendarEvents();
     });
+
+    for (var i = 0; i < branchChecks.length; i++) {
+        branchChecks[i].addEventListener('change', function() {
+            var allSelected = branchChecks.length > 0;
+            for (var j = 0; j < branchChecks.length; j++) {
+                if (!branchChecks[j].checked) { allSelected = false; break; }
+            }
+            branchAll.checked = allSelected;
+            updateBranchDisplay();
+            loadCalendarEvents();
+        });
+    }
+
+    updateBranchDisplay();
 
     document.getElementById('filter-status').addEventListener('change', function() {
         loadCalendarEvents();

@@ -7573,7 +7573,8 @@ def jadwal_index(request):
 def jadwal_events(request):
     start = request.GET.get('start', '').split('T')[0]
     end = request.GET.get('end', '').split('T')[0]
-    branch = request.GET.get('branch', 'all')
+    filter_branch_list = request.GET.getlist('branch', [])
+    filter_branch_list = [b for b in filter_branch_list if b and b != 'all']
     status = request.GET.get('status', 'all')
     driver = request.GET.get('driver', '').strip()
 
@@ -7584,8 +7585,8 @@ def jadwal_events(request):
         regional_id__in=areas
     ).exclude(order_status__in=['PENDING', 'DRAFT', 'BATAL'])
 
-    if branch != 'all':
-        orders = orders.filter(regional_id=branch)
+    if filter_branch_list:
+        orders = orders.filter(regional_id__in=filter_branch_list)
     if status != 'all':
         orders = orders.filter(schedule_status=status)
     if driver:

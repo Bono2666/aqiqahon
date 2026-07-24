@@ -34,6 +34,16 @@
   {% block stylesheets %}{% endblock stylesheets %}
 
   {{ form.media }}
+
+  <style>
+  @media (max-width: 991.98px) {
+    .dropdown-menu-end {
+      position: absolute !important;
+      right: 0 !important;
+      left: auto !important;
+    }
+  }
+  </style>
 </head>
 
 <body class="">
@@ -52,7 +62,7 @@
   </div>
 
   <div>
-    <img src="{% static 'img/transparent-logo.png' %}" alt="Logo Sahabat Aqiqah" class="position-fixed h-100 d-lg-block top-0 {% if request|is_mobile %}w-80{% else %}w-40 d-none{% endif %} translate-middle-x start-50 opacity-2 z-index-0" style="object-fit: contain;">
+    <img src="{% static 'img/transparent-logo.png' %}" alt="Logo Sahabat Aqiqah" class="position-fixed h-100 d-lg-block top-0 {% if request|is_mobile %}w-80{% else %}w-40 d-none{% endif %} translate-middle-x start-50 opacity-2 z-index-0 pointer-events-none" style="object-fit: contain;">
   </div>  
 
   {% include "includes/scripts.html" %}

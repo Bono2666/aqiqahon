@@ -688,7 +688,8 @@ class FormPackage(ModelForm):
         self.fields['box'].label = 'Jumlah Box'
         self.fields['quantity'].label = 'Jumlah Kambing'
         self.fields['type'].label = 'Tipe Kambing'
-        self.fields['goat_type'].label = 'Jenis Kambing'
+        self.fields['goat_type'].label = 'Jenis Kambing 1'
+        self.fields['goat_type2'].label = 'Jenis Kambing 2'
         self.fields['dashboard'].label = 'Dashboard'
         self.fields['package_id'].widget = forms.TextInput(
             {'class': 'form-control-sm text-uppercase'})
@@ -719,7 +720,8 @@ class FormPackageUpdate(ModelForm):
         self.fields['box'].label = 'Jumlah Box'
         self.fields['quantity'].label = 'Jumlah Kambing'
         self.fields['type'].label = 'Tipe Kambing'
-        self.fields['goat_type'].label = 'Jenis Kambing'
+        self.fields['goat_type'].label = 'Jenis Kambing 1'
+        self.fields['goat_type2'].label = 'Jenis Kambing 2'
         self.fields['dashboard'].label = 'Dashboard'
         self.fields['package_name'].widget = forms.TextInput(
             {'class': 'form-control-sm'})
@@ -749,7 +751,8 @@ class FormPackageView(ModelForm):
         self.fields['box'].label = 'Jumlah Box'
         self.fields['quantity'].label = 'Jumlah Kambing'
         self.fields['type'].label = 'Tipe Kambing'
-        self.fields['goat_type'].label = 'Jenis Kambing'
+        self.fields['goat_type'].label = 'Jenis Kambing 1'
+        self.fields['goat_type2'].label = 'Jenis Kambing 2'
         self.fields['dashboard'].label = 'Dashboard'
         self.fields['package_name'].widget = forms.TextInput(
             {'class': 'form-control-sm', 'readonly': 'readonly'})
@@ -765,7 +768,7 @@ class FormPackageView(ModelForm):
     class Meta:
         model = Package
         fields = ['package_id', 'package_name', 'category',
-                  'male_price', 'female_price', 'box', 'quantity', 'type', 'goat_type', 'dashboard']
+                  'male_price', 'female_price', 'box', 'quantity', 'type', 'goat_type', 'goat_type2', 'dashboard']
 
 
 class DateInput(forms.DateInput):

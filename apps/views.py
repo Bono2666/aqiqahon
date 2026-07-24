@@ -247,12 +247,32 @@ def dashboard(request):
     total_type_kambing_jantan = 0
     total_type_kambing_betina = 0
     for gt in goat_types:
-        count_jantan = order_packages.filter(
-            package__goat_type=gt, type='Jantan'
-        ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
-        count_betina = order_packages.filter(
-            package__goat_type=gt, type='Betina'
-        ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        count_jantan = (
+            order_packages.filter(
+                package__goat_type=gt, package__goat_type2__isnull=True, type='Jantan'
+            ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        ) + (
+            order_packages.filter(
+                package__goat_type=gt, package__goat_type2__isnull=False, type='Jantan'
+            ).annotate(calculated=1 * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        ) + (
+            order_packages.filter(
+                package__goat_type2=gt, package__goat_type2__isnull=False, type='Jantan'
+            ).annotate(calculated=1 * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        )
+        count_betina = (
+            order_packages.filter(
+                package__goat_type=gt, package__goat_type2__isnull=True, type='Betina'
+            ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        ) + (
+            order_packages.filter(
+                package__goat_type=gt, package__goat_type2__isnull=False, type='Betina'
+            ).annotate(calculated=1 * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        ) + (
+            order_packages.filter(
+                package__goat_type2=gt, package__goat_type2__isnull=False, type='Betina'
+            ).annotate(calculated=1 * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+        )
         total_type_kambing_jantan += count_jantan
         total_type_kambing_betina += count_betina
         if count_jantan > 0:
@@ -273,9 +293,19 @@ def dashboard(request):
     )
     for gt in goat_types:
         for tipe in ['Jantan', 'Betina']:
-            count = kambing_guling_packages.filter(
-                package__goat_type=gt, type=tipe
-            ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+            count = (
+                kambing_guling_packages.filter(
+                    package__goat_type=gt, package__goat_type2__isnull=True, type=tipe
+                ).annotate(calculated=F('package__quantity') * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+            ) + (
+                kambing_guling_packages.filter(
+                    package__goat_type=gt, package__goat_type2__isnull=False, type=tipe
+                ).annotate(calculated=1 * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+            ) + (
+                kambing_guling_packages.filter(
+                    package__goat_type2=gt, package__goat_type2__isnull=False, type=tipe
+                ).annotate(calculated=1 * F('quantity')).aggregate(total=Sum('calculated'))['total'] or 0
+            )
             if count > 0:
                 recap_kambing_guling.append({
                     'name': gt.goat_type_name,
@@ -1893,6 +1923,9 @@ def package_add(request):
             goat_type_id = request.POST.get('goat_type')
             if goat_type_id:
                 new.goat_type_id = goat_type_id
+            goat_type2_id = request.POST.get('goat_type2')
+            if goat_type2_id:
+                new.goat_type2_id = goat_type2_id
             dashboard_id = request.POST.get('dashboard')
             if dashboard_id:
                 new.dashboard_id = dashboard_id
@@ -3922,6 +3955,11 @@ def package_update(request, _id):
                 update.goat_type_id = goat_type_id
             else:
                 update.goat_type = None
+            goat_type2_id = request.POST.get('goat_type2')
+            if goat_type2_id:
+                update.goat_type2_id = goat_type2_id
+            else:
+                update.goat_type2 = None
             dashboard_id = request.POST.get('dashboard')
             if dashboard_id:
                 update.dashboard_id = dashboard_id
@@ -3988,6 +4026,208 @@ def package_delete(request, _id):
 
     packages.delete()
     return HttpResponseRedirect(reverse('package-index'))
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='PACKAGE')
+def package_duplicate(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Method not allowed'}, status=405)
+
+    original_id = request.POST.get('original_package_id', '').strip()
+    new_id = request.POST.get('new_package_id', '').strip()
+
+    if not original_id or not new_id:
+        return JsonResponse({'status': 'error', 'message': 'ID Paket tidak boleh kosong'}, status=400)
+
+    if not request.user.is_superuser:
+        try:
+            auth = Auth.objects.get(user_id=request.user.user_id, menu_id='PACKAGE')
+            if not auth.add:
+                return JsonResponse({'status': 'error', 'message': 'Anda tidak memiliki akses'}, status=403)
+        except Auth.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Anda tidak memiliki akses'}, status=403)
+
+    try:
+        original = Package.objects.get(package_id=original_id)
+    except Package.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Paket asli tidak ditemukan'}, status=404)
+
+    if Package.objects.filter(package_id=new_id).exists():
+        return JsonResponse({'status': 'error', 'message': 'ID Paket baru sudah digunakan'}, status=400)
+
+    now = timezone.now()
+    user_id = request.user.user_id
+
+    new_package = Package.objects.create(
+        package_id=new_id.upper(),
+        package_name=original.package_name,
+        category=original.category,
+        promo=original.promo,
+        active=False,
+        male_price=original.male_price,
+        female_price=original.female_price,
+        box=original.box,
+        quantity=original.quantity,
+        type=original.type,
+        goat_type=original.goat_type,
+        goat_type2=original.goat_type2,
+        dashboard=original.dashboard,
+        entry_date=now,
+        entry_by=user_id,
+        update_date=now,
+        update_by=user_id,
+    )
+
+    rice_items = Rice.objects.filter(package=original)
+    Rice.objects.bulk_create([
+        Rice(
+            package=new_package,
+            cuisine=r.cuisine,
+            extra_price=r.extra_price,
+            default=r.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for r in rice_items
+    ])
+
+    main_cuisine_items = MainCuisine.objects.filter(package=original)
+    MainCuisine.objects.bulk_create([
+        MainCuisine(
+            package=new_package,
+            cuisine=m.cuisine,
+            porsi=m.porsi,
+            extra_price=m.extra_price,
+            default=m.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for m in main_cuisine_items
+    ])
+
+    sub_cuisine_items = SubCuisine.objects.filter(package=original)
+    SubCuisine.objects.bulk_create([
+        SubCuisine(
+            package=new_package,
+            cuisine=s.cuisine,
+            porsi=s.porsi,
+            extra_price=s.extra_price,
+            default=s.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for s in sub_cuisine_items
+    ])
+
+    side_cuisine_models = [SideCuisine1, SideCuisine2, SideCuisine3, SideCuisine4, SideCuisine5]
+    for model in side_cuisine_models:
+        items = model.objects.filter(package=original)
+        model.objects.bulk_create([
+            model(
+                package=new_package,
+                cuisine=item.cuisine,
+                extra_price=item.extra_price,
+                default=item.default,
+                entry_date=now,
+                entry_by=user_id,
+                update_date=now,
+                update_by=user_id,
+            ) for item in items
+        ])
+
+    bag_items = Bag.objects.filter(package=original)
+    Bag.objects.bulk_create([
+        Bag(
+            package=new_package,
+            equipment=b.equipment,
+            extra_price=b.extra_price,
+            default=b.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for b in bag_items
+    ])
+
+    beverage_items = Beverage.objects.filter(package=original)
+    Beverage.objects.bulk_create([
+        Beverage(
+            package=new_package,
+            equipment=b.equipment,
+            extra_price=b.extra_price,
+            default=b.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for b in beverage_items
+    ])
+
+    pack_items = Pack.objects.filter(package=original)
+    Pack.objects.bulk_create([
+        Pack(
+            package=new_package,
+            equipment=p.equipment,
+            extra_price=p.extra_price,
+            default=p.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for p in pack_items
+    ])
+
+    souvenir_items = Souvenir.objects.filter(package=original)
+    Souvenir.objects.bulk_create([
+        Souvenir(
+            package=new_package,
+            equipment=s.equipment,
+            extra_price=s.extra_price,
+            default=s.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for s in souvenir_items
+    ])
+
+    other_items = Other.objects.filter(package=original)
+    Other.objects.bulk_create([
+        Other(
+            package=new_package,
+            equipment=o.equipment,
+            extra_price=o.extra_price,
+            default=o.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for o in other_items
+    ])
+
+    addon_items = Addon.objects.filter(package=original)
+    Addon.objects.bulk_create([
+        Addon(
+            package=new_package,
+            equipment=a.equipment,
+            extra_price=a.extra_price,
+            default=a.default,
+            entry_date=now,
+            entry_by=user_id,
+            update_date=now,
+            update_by=user_id,
+        ) for a in addon_items
+    ])
+
+    return JsonResponse({
+        'status': 'success',
+        'message': f'Paket berhasil diduplikasi sebagai {new_package.package_id}',
+        'redirect': reverse('package-view', args=[new_package.package_id])
+    })
 
 
 @login_required(login_url='/login/')

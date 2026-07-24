@@ -21,12 +21,12 @@
                             <div class="{% if request|is_mobile %}col-1{% else %}col-6{% endif %} text-end">
                                 {% if request|is_mobile %}
                                 <div class="dropdown float-lg-end pe-2">
-                                    <a class="cursor-pointer text-body" id="dropdownTable" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <a class="cursor-pointer text-body" id="dropdownTable">
                                         <i class="fas fa-ellipsis-v"></i>
                                     </a>
-                                    <ul class="dropdown-menu px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
+                                    <ul class="dropdown-menu dropdown-menu-end px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
                                         <li><a class="dropdown-item border-radius-md" href="{% if crud == 'view' %}{% url 'promo-index' %}{% else %}{% url 'promo-view' data.promo_id %}{% endif %}">{% if crud == 'view' %}Kembali{% else %}Batal{% endif %}</a></li>
-                                        <li><a class="dropdown-item border-radius-md" href="{% url 'promo-update' data.promo_id %}" {% if not btn.edit and not request.user.is_superuser %}hidden{% endif %} {% if crud == 'update' %}hidden{% endif %}>Edit</a></li>
+                                        <li><a class="dropdown-item border-radius-md" href="{% url 'promo-update' data.promo_id %}" {% if not btn.edit and not request.user.is_superuser %}hidden{% endif %} {% if crud == 'update' %}hidden{% endif %}>Ubah</a></li>
                                         <li><button type="submit" class="dropdown-item border-radius-md text-body" {% if crud == 'view' %}hidden{% endif %}>Simpan</button></li>
                                         <li><a class="dropdown-item border-radius-md text-danger" data-bs-toggle="modal" data-bs-target="#confirm-{{ data.promo_id }}" {% if not btn.delete and not request.user.is_superuser %}hidden{% else %}{% if crud == 'update' %}hidden{% endif %}{% endif %}>Hapus</a></li>
                                     </ul>
@@ -94,7 +94,7 @@
                         <h5 class="mb-0">Pilihan Hadiah</h5>
                     </div>
                     <div class="col-6 text-end">
-                        <button type="button" class="btn btn-sm bg-gradient-primary mb-0" data-bs-toggle="modal" data-bs-target="#dialog-popup" {% if not btn.edit and not request.user.is_superuser %}disabled{% else %}{% if crud == 'update' %}disabled{% endif %}{% endif %}><i class="fas fa-plus"></i>&nbsp;&nbsp;Tambah Hadiah</button>
+                        <button type="button" class="btn btn-sm mb-0 {% if request|is_mobile %}bg-gradient-dark rounded-circle{% else %}bg-gradient-primary{% endif %}" style="{% if request|is_mobile %}width: 2.25rem; height: 2.25rem; padding: 0; display: inline-flex; align-items: center; justify-content: center;{% endif %}" data-bs-toggle="modal" data-bs-target="#dialog-popup" {% if not btn.edit and not request.user.is_superuser %}disabled{% else %}{% if crud == 'update' %}disabled{% endif %}{% endif %}><i class="fas fa-plus"></i>{% if not request|is_mobile %}&nbsp;&nbsp;Tambah Hadiah{% endif %}</button>
                     </div>
                 </div>
                 <div class="modal fade" id="dialog-popup" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
@@ -228,11 +228,10 @@
     } );
 
     let btn_menu = document.getElementById('dropdownTable');
-    let dropdown_menu = document.getElementsByClassName('dropdown-menu');
     
     // open dropdown menu
     btn_menu.addEventListener('click', function() {
-        dropdown_menu[0].classList.toggle('show');
+        this.nextElementSibling.classList.toggle('show');
     });
 
     $(document).on('click', 'tbody tr:not(last-child)', function() {

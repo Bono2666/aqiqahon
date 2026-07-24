@@ -4,6 +4,8 @@
 
 {% block content %}
 
+{% load user_agents %}
+
 <div class="container-fluid">
     <div class="row">
         <div class="col-xl-12 order-xl-1">
@@ -12,14 +14,28 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="row">
-                            <div class="col-6 d-flex align-items-center">
+                            <div class="{% if request|is_mobile %}col-11{% else %}col-6{% endif %} d-flex align-items-center">
                                 <h4 class="mb-2">Region ID: {{ data.region_id }}</h4>
                             </div>
-                            <div class="col-6 text-end">
-                                <a href="{% if crud == 'view' %}{% url 'region-index' %}{% else %}{% url 'region-view' data.region_id %}{% endif %}" class="btn btn-sm bg-gradient-dark mb-0"><i class="fas fa-reply"></i>&nbsp;&nbsp;{% if crud == 'view' %}Back{% else %}Cancel{% endif %}</a>
+                            <div class="{% if request|is_mobile %}col-1{% else %}col-6{% endif %} text-end">
+                                {% if request|is_mobile %}
+                                <div class="dropdown float-lg-end pe-2">
+                                    <a class="cursor-pointer text-body" id="dropdownTable">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
+                                        <li><a class="dropdown-item border-radius-md" href="{% if crud == 'view' %}{% url 'region-index' %}{% else %}{% url 'region-view' data.region_id %}{% endif %}">{% if crud == 'view' %}Kembali{% else %}Batal{% endif %}</a></li>
+                                        <li><a class="dropdown-item border-radius-md" href="{% url 'region-update' data.region_id %}" {% if not btn.edit and not request.user.is_superuser %}hidden{% endif %} {% if crud == 'update' %}hidden{% endif %}>Ubah</a></li>
+                                        <li><button class="dropdown-item border-radius-md text-body" {% if crud == 'view' %}hidden{% endif %} type="submit">Simpan</button></li>
+                                        <li><a type="button" class="dropdown-item border-radius-md text-primary" data-bs-toggle="modal" data-bs-target="#confirm-{{ data.region_id }}" {% if not btn.delete and not request.user.is_superuser %}hidden{% endif %}{% if crud == 'update' %}hidden{% endif %}>Hapus</a></li>
+                                    </ul>
+                                </div>
+                                {% else %}
+                                <a href="{% if crud == 'view' %}{% url 'region-index' %}{% else %}{% url 'region-view' data.region_id %}{% endif %}" class="btn btn-sm bg-gradient-dark mb-0"><i class="fas fa-reply"></i>&nbsp;&nbsp;{% if crud == 'view' %}Kembali{% else %}Batal{% endif %}</a>
                                 <a href="{% url 'region-update' data.region_id %}" class="btn btn-sm bg-gradient-dark mb-0 {% if not btn.edit and not request.user.is_superuser %}disabled{% endif %}" {% if crud == 'update' %}hidden{% endif %}><i class="fas fa-edit"></i>&nbsp;&nbsp;Edit</a>
                                 <button type="submit" class="btn btn-sm bg-gradient-dark mb-0" {% if crud == 'view' %}hidden{% endif %}><i class="fas fa-save"></i>&nbsp;&nbsp;Save</button>
                                 <button type="button" class="btn btn-sm bg-gradient-danger mb-0 {% if not btn.delete and not request.user.is_superuser %}disabled{% else %}{% if crud == 'update' %}disabled{% endif %}{% endif %}" data-bs-toggle="modal" data-bs-target="#confirm-{{ data.region_id }}"><i class="fas fa-trash"></i>&nbsp;&nbsp;Delete</button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -34,7 +50,7 @@
                                     Are you sure you want to delete region <strong>{{ data.region_name }}</strong>?
                                 </div>
                                 <div class="modal-footer border-0">
-                                    <button type="button" class="btn btn-sm bg-gradient-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-sm bg-gradient-secondary" data-bs-dismiss="modal">Batal</button>
                                     <a href="{% url 'region-delete' data.region_id %}" role="button" class="btn btn-sm bg-gradient-danger text-white">Delete
                                     </a>
                                 </div>
@@ -107,7 +123,7 @@
                                     </div>
                                 </div>
                                 <div class="modal-footer border-0">
-                                    <button type="button" class="btn bg-gradient-dark" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn bg-gradient-dark" data-bs-dismiss="modal">Batal</button>
                                     <button type="submit" class="btn bg-gradient-danger text-white">Save
                                     </button>
                                 </div>
@@ -149,7 +165,7 @@
                                                     Are you sure you want to delete area <strong>{{ item.area.area_name }}</strong>?
                                                 </div>
                                                 <div class="modal-footer border-0">
-                                                    <a href="{% url 'region-view' item.region_id %}" role="button" class="btn btn-sm bg-gradient-dark">Cancel</a>
+                                                    <a href="{% url 'region-view' item.region_id %}" role="button" class="btn btn-sm bg-gradient-dark">Batal</a>
                                                     <a href="{% url 'region-detail-delete' item.region_id item.area_id %}" role="button" class="btn btn-sm bg-gradient-danger text-white">Delete
                                                     </a>
                                                 </div>
@@ -186,5 +202,12 @@
             button.classList.add('border-radius-top-start-circle', 'border-radius-bottom-end-circle', 'border-radius-top-end-circle', 'border-radius-bottom-start-circle');
         }
     } );
+
+    let btn_menu = document.getElementById('dropdownTable');
+    if (btn_menu) {
+        btn_menu.addEventListener('click', function() {
+            this.nextElementSibling.classList.toggle('show');
+        });
+    }
 </script>
 {% endblock javascripts %}

@@ -4,24 +4,38 @@
 
 {% block content %}
 
+{% load user_agents %}
+
 <div class="container-fluid">
     <div class="row">
         <div class="col-xl-12 order-xl-1">
             <form action="{% url 'package-add' %}" method="post" enctype="multipart/form-data">
                 {% csrf_token %}
-                <div class="card">
+                <div class="card {% if request|is_mobile %}mb-6 z-index-0{% else %}mb-4{% endif %}">
                     <div class="card-header">
                         <div class="row">
-                            <div class="col-6 d-flex align-items-center">
+                            <div class="{% if request|is_mobile %}col-11{% else %}col-6{% endif %} d-flex align-items-center">
                                 <h4 class="mb-2">Buat Paket Baru</h4>
                             </div>
-                            <div class="col-6 text-end">
+                            <div class="{% if request|is_mobile %}col-1{% else %}col-6{% endif %} text-end">
+                                {% if request|is_mobile %}
+                                <div class="dropdown float-lg-end pe-2">
+                                    <a class="cursor-pointer text-body" id="dropdownTable">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
+                                        <li><button type="submit" class="dropdown-item border-radius-md text-body">Simpan</button></li>
+                                        <li><a class="dropdown-item border-radius-md" href="{% url 'package-index' %}">Batal</a></li>
+                                    </ul>
+                                </div>
+                                {% else %}
                                 <input type="checkbox" class="cursor-pointer border mt-4" name="active"/>
                                 <label class="form-control-label mt-4 me-4">Aktif</label>
                                 <input type="checkbox" class="cursor-pointer border mt-4" name="promo"/>
                                 <label class="form-control-label mt-4 me-4">Ikut Promo</label>
                                 <button type="submit" class="btn bg-gradient-primary mb-0"><i class="fas fa-save"></i>&nbsp;&nbsp;Simpan</button>
                                 <a href="{% url 'package-index' %}" class="btn bg-gradient-dark mb-0"><i class="fas fa-reply"></i>&nbsp;&nbsp;Batal</a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -33,7 +47,7 @@
                             </div>
                             {% endif %} -->
                             <div class="row">
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="shadow-none">
                                         {{ form.package_id.label_tag }}{{ form.package_id }}
                                         <div class="text-sm text-danger">
@@ -49,7 +63,7 @@
                                         </div>
                                     </div>  
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="shadow-none">
                                         {{ form.category.label_tag }}
                                         <select name="category" class="form-control form-select-sm">
@@ -63,7 +77,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="shadow-none">
                                         {{ form.male_price.label_tag }}{{ form.male_price }}
                                         <div class="text-sm text-danger">
@@ -71,8 +85,6 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="row">
                                 <div class="col-md-3">
                                     <div class="shadow-none">
                                         {{ form.female_price.label_tag }}{{ form.female_price }}
@@ -81,6 +93,8 @@
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="row">
                                 <div class="col-md-2">
                                     <div class="shadow-none">
                                         {{ form.box.label_tag }}{{ form.box }}
@@ -124,7 +138,21 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-1">
+                                <div class="col-md-2">
+                                    <div class="shadow-none">
+                                        {{ form.goat_type2.label_tag }}
+                                        <select name="goat_type2" class="form-control form-select-sm">
+                                            <option value="">-- Pilih --</option>
+                                            {% for item in goat_types %}
+                                            <option value="{{ item.goat_type_id }}">{{ item.goat_type_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="text-sm text-danger">
+                                            {{ form.goat_type2.errors }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
                                     <div class="shadow-none">
                                         {{ form.dashboard.label_tag }}
                                         <select name="dashboard" class="form-control form-select-sm">
@@ -150,5 +178,12 @@
 {% endblock content %}
 
 {% block javascripts %}
-
+<script>
+    let btn_menu = document.getElementById('dropdownTable');
+    if (btn_menu) {
+        btn_menu.addEventListener('click', function() {
+            this.nextElementSibling.classList.toggle('show');
+        });
+    }
+</script>
 {% endblock javascripts %}

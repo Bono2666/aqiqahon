@@ -434,7 +434,9 @@ Widget
 - Rekap Dekorasi: Menampilkan jumlah Qty Paket dengan Dashboard "Dekorasi", dikelompokkan berdasarkan jenis kelamin anak (Laki-Laki / Perempuan)
 - Rekap Paket Nasi Box: Menampilkan jumlah Qty Paket dengan Dashboard "Nasi Box"
 - Rekap Paket Kambing: Menampilkan rincian Jumlah Porsi menu Daging dan Olahan dari Paket dengan Dashboard "Paket Kambing"
-- Rekap Kambing Guling: Menampilkan rincian Jumlah Jenis Kambing (GoatType) dan Tipe (Jantan/Betina) berdasarkan Order Package pada hari yang dipilih
+- Rekap Kambing Jantan: Menampilkan jumlah kambing jantan per Jenis Kambing dengan logika `goat_type2`
+- Rekap Kambing Betina: Menampilkan jumlah kambing betina per Jenis Kambing dengan logika `goat_type2`
+- Rekap Kambing Guling: Menampilkan rincian Jumlah Jenis Kambing (GoatType) dan Tipe (Jantan/Betina) dengan logika `goat_type2`. Menggunakan logika `goat_type2` untuk perhitungan yang akurat.
 
 ### Konvensi Warna Badge
 
@@ -472,6 +474,14 @@ Automatically generated from Order Packages.
 | Istimewa+ | xx  |
 | Super     | xx  |
 | Super+    | xx  |
+
+**Logika Perhitungan**:
+
+- **Jika `goat_type2` kosong**: `Jumlah Kambing × Qty`
+  - Contoh: Tipe: Betina, Jenis: Tipe B, Jumlah 2, Qty 3 → Rekap Betina → Tipe B: **6** (2×3)
+- **Jika `goat_type2` diisi**: `1 × Qty` untuk masing-masing jenis
+  - Contoh: Tipe: Jantan, Jenis: Tipe C, Jenis 2: Tipe D, Jumlah 2, Qty 3 → Rekap Jantan → Tipe C: **3** (1×3), Tipe D: **3** (1×3)
+- Logika yang sama diterapkan untuk **Rekap Kambing Jantan**, **Rekap Kambing Betina**, dan **Rekap Kambing Guling**
 
 ---
 
@@ -619,14 +629,18 @@ Sample Data
 
 Tambahkan field baru.
 
-| Field     | Type          |
-| --------- | ------------- |
-| goat_type | FK → GoatType |
+| Field      | Type          |
+| ---------- | ------------- |
+| goat_type  | FK → GoatType |
+| goat_type2 | FK → GoatType |
+| dashboard  | FK → Dashboard|
 
 Business Rules
 
-- Wajib diisi.
-- Menjadi default ketika Package dipilih.
+- `goat_type` wajib diisi.
+- `goat_type2` opsional.
+- `dashboard` menentukan di dashboard mana paket ditampilkan.
+- Menjadi default ketika Package dipilih pada Order.
 
 ---
 
@@ -739,10 +753,17 @@ Status COMPLETED hanya dapat dipilih apabila Delivery telah selesai.
 
 ## Goat Type Validation
 
-- Goat Type wajib diisi.
+- Goat Type 1 (`goat_type`) wajib diisi.
+- Goat Type 2 (`goat_type2`) opsional.
 - Goat Type mengikuti nilai pada Order Package.
 - Rekap produksi menggunakan Goat Type dari Order Package.
 - Perubahan Goat Type di Master Package tidak mengubah Order yang sudah dibuat.
+
+**Logika Perhitungan Dashboard**:
+
+- Jika `goat_type2` kosong → hitung `Jumlah Kambing × Qty`
+- Jika `goat_type2` diisi → hitung `1 × Qty` untuk masing-masing jenis (goat_type & goat_type2)
+- Logika ini diterapkan pada: Rekap Kambing Jantan, Rekap Kambing Betina, Rekap Kambing Guling
 
 ---
 
@@ -976,7 +997,18 @@ Audit Trail meliputi:
 | female_price | DecimalField(12,0) | Harga betina |
 | box | IntegerField | Jumlah box |
 | quantity | IntegerField | Kuantitas |
-| type | CharField(10) | Tipe paket |
+| type | CharField(10) | Tipe paket (Jantan/Betina) |
+| goat_type | FK → GoatType | Jenis Kambing 1 (default) |
+| goat_type2 | FK → GoatType | Jenis Kambing 2 (opsional) |
+| dashboard | FK → Dashboard | Dashboard card assignment |
+
+**Fitur Duplikasi Paket**:
+
+- Endpoint: `POST /master/package/duplicate/`
+- Akses: User dengan hak akses tambah paket (`btn.add`)
+- Input: `original_package_id`, `new_package_id`
+- Hasil: Paket baru dengan semua data identical (kecuali `active=False`)
+- Sub-komponen yang diduplikasi: Rice, MainCuisine, SubCuisine, SideCuisine1-5, Bag, Beverage, Pack, Souvenir, Other, Addon
 
 **Komposisi Paket (per komponen):**
 | Model | Relasi | Fields | Unique Constraint |

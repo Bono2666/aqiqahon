@@ -108,6 +108,8 @@ urlpatterns = [
          views.package_update, name='package-update'),
     path('master/package/delete/<str:_id>/',
          views.package_delete, name='package-delete'),
+    path('master/package/duplicate/',
+         views.package_duplicate, name='package-duplicate'),
     path('master/package-rice/<str:_id>/',
          views.package_rice_view, name='package-rice-view'),
     path('master/package-subcuisine/<str:_id>/',

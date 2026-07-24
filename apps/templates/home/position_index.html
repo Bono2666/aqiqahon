@@ -4,17 +4,30 @@
 
 {% block content %}
 
+{% load user_agents %}
+
 <!-- Page content -->
 <div class="container-fluid py-0">
     <div class="row">
         <div class="col-12">
             <div class="card mb-4 p-4">
                 <div class="row mb-4">
-                    <div class="col-6 d-flex align-items-center">
+                    <div class="{% if request|is_mobile %}col-11{% else %}col-6{% endif %} d-flex align-items-center">
                         <h4 class="mb-0">Data Posisi</h4>
                     </div>
-                    <div class="col-6 text-end">
+                    <div class="{% if request|is_mobile %}col-1{% else %}col-6{% endif %} text-end">
+                        {% if request|is_mobile %}
+                        <div class="dropdown float-lg-end pe-2 {% if not btn.add and not request.user.is_superuser %}d-none{% endif %}">
+                            <a class="cursor-pointer text-body" id="dropdownTable">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
+                                <li><a class="dropdown-item border-radius-md" href="{% url 'position-add' %}">Buat Posisi Baru</a></li>
+                            </ul>
+                        </div>
+                        {% else %}
                         <a class="btn btn-sm bg-gradient-primary mb-0 {% if not btn.add and not request.user.is_superuser %}disabled{% endif %}" href="{% url 'position-add' %}"><i class="fas fa-plus"></i>&nbsp;&nbsp;Buat Posisi Baru</a>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="card-body px-0 pt-0 pb-2">
@@ -82,6 +95,13 @@
             button.classList.add('border-radius-top-start-circle', 'border-radius-bottom-end-circle', 'border-radius-top-end-circle', 'border-radius-bottom-start-circle');
         }
     } );
+
+    let btn_menu = document.getElementById('dropdownTable');
+    if (btn_menu) {
+        btn_menu.addEventListener('click', function() {
+            this.nextElementSibling.classList.toggle('show');
+        });
+    }
 </script>
 
 {% endblock javascripts %}

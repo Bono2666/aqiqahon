@@ -229,30 +229,7 @@ body:not(.dark-page) .reminder-empty {
   </div>
 </nav>
 <!-- End Navbar -->
-<div class="modal fade" id="confirm" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="ModalLabel">Konfirmasi</h5>
-      </div>
-      <div class="modal-body border-bottom-0">
-        Anda yakin ingin keluar dari aplikasi?
-      </div>
-      <div class="modal-footer border-0">
-        <button type="button" class="btn btn-sm bg-gradient-dark" data-bs-dismiss="modal">Batal</button>
-        <form method="post" action="{% url 'logout' %}">
-        {% csrf_token %}
-          <button type="submit" role="button" class="btn btn-sm bg-gradient-primary text-white">Ya
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
 
-<div>
-  <img src="/apps/static/img/transparent-logo.png" alt="Logo Sahabat Aqiqah" class="position-fixed h-100 w-40 d-lg-block top-0 {% if request|is_mobile %}w-80 translate-middle-x{% else %}w-40 d-none ms-n9{% endif %} start-50 opacity-2" style="object-fit: contain;">
-</div>
 
 <script>
 (function() {

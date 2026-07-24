@@ -258,7 +258,17 @@ Digunakan untuk: tas, minuman, souvenir, box, dll.
 | `female_price` | Decimal(12,0) | Harga kambing betina        |
 | `box`          | Integer       | Jumlah box per porsi        |
 | `quantity`     | Integer       | Default kuantitas           |
-| `type`         | Char(10)      | Tipe paket                  |
+| `type`         | Char(10)      | Tipe paket (Jantan/Betina)  |
+| `goat_type`    | FK → GoatType | Jenis Kambing 1 (default)   |
+| `goat_type2`   | FK → GoatType | Jenis Kambing 2 (opsional)  |
+| `dashboard`    | FK → Dashboard| Dashboard card assignment   |
+
+**Fitur Duplikasi Paket**:
+
+- Akses: Klik kanan pada baris tabel → menu "Duplikasi"
+- Input: ID Paket baru (manual)
+- Hasil: Paket baru dengan semua data identical (kecuali `active=False`, `entry_by` = user duplikasi)
+- Sub-komponen yang diduplikasi: Rice, MainCuisine, SubCuisine, SideCuisine1-5, Bag, Beverage, Pack, Souvenir, Other, Addon
 
 **Relasi Paket** (tabel penghubung dengan extra_price & default):
 
@@ -679,7 +689,7 @@ Field
 
 Sistem menghasilkan rekap otomatis.
 
-## Rekap Jenis Kambing
+## Rekap Jenis Kambing (Jantan & Betina)
 
 | Jenis Kambing | Qty |
 | ------------- | --- |
@@ -691,6 +701,13 @@ Sistem menghasilkan rekap otomatis.
 | Istimewa+     | xx  |
 | Super         | xx  |
 | Super+        | xx  |
+
+**Logika Perhitungan**:
+
+- **Jika `goat_type2` kosong**: Hitung `Jumlah Kambing × Qty`
+  - Contoh: Tipe: Betina, Jenis: Tipe B, Jumlah 2, Qty 3 → Rekap Betina → Tipe B: **6** (2×3)
+- **Jika `goat_type2` diisi**: Hitung `1 × Qty` untuk masing-masing jenis
+  - Contoh: Tipe: Jantan, Jenis: Tipe C, Jenis 2: Tipe D, Jumlah 2, Qty 3 → Rekap Jantan → Tipe C: **3** (1×3), Tipe D: **3** (1×3)
 
 Rekap ini digunakan sebagai dasar pembelian kambing setiap hari.
 
@@ -749,7 +766,7 @@ Widget
 - Total Box
 
 
-Widget Rekap Jenis Kambing
+Widget Rekap Jenis Kambing (Jantan & Betina)
 
 - Grade A
 - Grade B
@@ -760,6 +777,12 @@ Widget Rekap Jenis Kambing
 - Super
 - Super+
 - Total Type Kambing
+
+**Logika Perhitungan**:
+
+- **Jika `goat_type2` kosong**: `Jumlah Kambing × Qty`
+- **Jika `goat_type2` diisi**: `1 × Qty` per jenis (goat_type & goat_type2)
+- Logika yang sama diterapkan untuk **Rekap Kambing Guling**
 
 ---
 
@@ -858,11 +881,18 @@ Business Rules:
 
 Tambahkan field baru pada Master Paket.
 
-| Field     | Tipe          | Keterangan            |
-| --------- | ------------- | --------------------- |
-| goat_type | FK → GoatType | Jenis Kambing Default |
+| Field      | Tipe          | Keterangan            |
+| ---------- | ------------- | --------------------- |
+| goat_type  | FK → GoatType | Jenis Kambing 1       |
+| goat_type2 | FK → GoatType | Jenis Kambing 2       |
+| dashboard  | FK → Dashboard| Dashboard Assignment  |
 
-Field ini digunakan sebagai nilai default ketika Paket dipilih pada Order.
+Field `goat_type` dan `goat_type2` digunakan sebagai nilai default ketika Paket dipilih pada Order.
+
+**Logika Perhitungan Dashboard**:
+
+- Jika `goat_type2` kosong → hitung `Jumlah Kambing × Qty`
+- Jika `goat_type2` diisi → hitung `1 × Qty` untuk masing-masing jenis
 
 ---
 
@@ -1218,6 +1248,7 @@ Auto-tracking via `crum.get_current_user()` di method `save()`.
 | `/master/package/view/<id>/`           | `package_view`            | Detail paket               |
 | `/master/package/update/<id>/`         | `package_update`          | Edit paket                 |
 | `/master/package/delete/<id>/`         | `package_delete`          | Hapus paket                |
+| `/master/package/duplicate/`           | `package_duplicate`       | Duplikasi paket (POST)     |
 | `/master/package-rice/<id>/`           | `package_rice_view`       | Kelola beras paket         |
 | `/master/package-maincuisine/<id>/`    | —                         | Kelola masakan utama paket |
 | `/master/package-subcuisine/<id>/`     | `package_subcuisine_view` | Kelola sub masakan paket   |

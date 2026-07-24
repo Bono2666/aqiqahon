@@ -4,6 +4,8 @@
 
 {% block content %}
 
+{% load user_agents %}
+
 <div class="container-fluid mt-0">
     <div class="row">
         <div class="col-xl-12 order-xl-1">
@@ -12,16 +14,30 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="row">
-                            <div class="col-6 d-flex align-items-center">
+                            <div class="{% if request|is_mobile %}col-11{% else %}col-6{% endif %} d-flex align-items-center">
                                 <h4 class="mb-2">ID Kategori: {{ data.category_id }}</h4>
                             </div>
-                            <div class="col-6 text-end">
+                            <div class="{% if request|is_mobile %}col-1{% else %}col-6{% endif %} text-end">
+                                {% if request|is_mobile %}
+                                <div class="dropdown float-lg-end pe-2">
+                                    <a class="cursor-pointer text-body" id="dropdownTable">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
+                                        <li><a class="dropdown-item border-radius-md" href="{% if crud == 'view' %}{% url 'category-index' %}{% else %}{% url 'category-view' data.category_id %}{% endif %}">{% if crud == 'view' %}Kembali{% else %}Batal{% endif %}</a></li>
+                                        <li><a class="dropdown-item border-radius-md" href="{% url 'category-update' data.category_id %}" {% if not btn.edit and not request.user.is_superuser %}hidden{% endif %} {% if crud == 'update' %}hidden{% endif %}>Ubah</a></li>
+                                        <li><button class="dropdown-item border-radius-md text-body" {% if crud == 'view' %}hidden{% endif %} type="submit">Simpan</button></li>
+                                        <li><a type="button" class="dropdown-item border-radius-md text-primary" data-bs-toggle="modal" data-bs-target="#confirm-{{ data.category_id }}" {% if not btn.delete and not request.user.is_superuser %}hidden{% endif %}{% if crud == 'update' %}hidden{% endif %}>Hapus</a></li>
+                                    </ul>
+                                </div>
+                                {% else %}
                                 <input type="checkbox" class="cursor-pointer border mt-4" {% if crud == 'view' %}disabled{% endif %} name="active" {% if data.active %}checked{% endif %}/>
                                 <label class="form-control-label mt-4 me-4">Aktif</label>
                                 <a href="{% if crud == 'view' %}{% url 'category-index' %}{% else %}{% url 'category-view' data.category_id %}{% endif %}" class="btn btn-sm bg-gradient-dark mb-0"><i class="fas fa-reply"></i>&nbsp;&nbsp;{% if crud == 'view' %}Kembali{% else %}Batal{% endif %}</a>
                                 <a href="{% url 'category-update' data.category_id %}" class="btn btn-sm bg-gradient-dark mb-0 {% if not btn.edit and not request.user.is_superuser %}disabled{% endif %}" {% if crud == 'update' %}hidden{% endif %}><i class="fas fa-edit"></i>&nbsp;&nbsp;Edit</a>
                                 <button type="submit" class="btn btn-sm bg-gradient-dark mb-0" {% if crud == 'view' %}hidden{% endif %}><i class="fas fa-save"></i>&nbsp;&nbsp;Simpan</button>
                                 <button type="button" class="btn btn-sm bg-gradient-primary mb-0 {% if not btn.delete and not request.user.is_superuser %}disabled{% else %}{% if crud == 'update' %}disabled{% endif %}{% endif %}" data-bs-toggle="modal" data-bs-target="#confirm-{{ data.category_id }}"><i class="fas fa-trash"></i>&nbsp;&nbsp;Hapus</button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -66,5 +82,12 @@
 {% endblock content %}
 
 {% block javascripts %}
-
+<script>
+    let btn_menu = document.getElementById('dropdownTable');
+    if (btn_menu) {
+        btn_menu.addEventListener('click', function() {
+            this.nextElementSibling.classList.toggle('show');
+        });
+    }
+</script>
 {% endblock javascripts %}

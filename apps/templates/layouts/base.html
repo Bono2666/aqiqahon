@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 {% load static %}
+{% load user_agents %}
 <html lang="en">
 
 <head>
@@ -34,7 +35,33 @@
 
   <!-- Mobile overrides - MUST be last to override soft-ui-dashboard.css -->
   <style>
+  .main-content.has-logo-bg {
+    position: relative;
+  }
+  .main-content.has-logo-bg::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('/apps/static/img/transparent-logo.png');
+    background-repeat: no-repeat;
+    opacity: 0.2;
+    pointer-events: none;
+    z-index: 0;
+  }
+  @media (min-width: 992px) {
+    .main-content.has-logo-bg::before {
+      background-size: 40%;
+      background-position: center center;
+    }
+  }
   @media (max-width: 991.98px) {
+    .main-content.has-logo-bg::before {
+      background-size: 80%;
+      background-position: center 30%;
+    }
     /* Submenu: hide dots, fix margin & padding */
     .sidenav .sidenav-mini-icon,
     .g-sidenav-hidden .navbar-vertical .nav-item .collapse .nav .nav-item .nav-link .sidenav-mini-icon {
@@ -55,6 +82,11 @@
       opacity: 1 !important;
       width: auto !important;
     }
+    .dropdown-menu-end {
+      position: absolute !important;
+      right: 0 !important;
+      left: auto !important;
+    }
   }
   </style>
 </head>
@@ -63,16 +95,37 @@
 
   {% include "includes/sidebar.html" %}
   
-  <div class="main-content position-relative min-vh-100 pb-4">
+  <div class="main-content position-relative min-vh-100 pb-4 d-flex flex-column has-logo-bg">
     
       {% include 'includes/navigation.html' %}
     
-    <div class="mb-3">
+    <div class="flex-grow-1 mb-3">
       {% block content %}{% endblock content %}
     </div>
 
     {% include 'includes/footer.html' %}
 
+  </div>
+
+  <div class="modal fade" id="confirm" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="ModalLabel">Konfirmasi</h5>
+        </div>
+        <div class="modal-body border-bottom-0">
+          Anda yakin ingin keluar dari aplikasi?
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-sm bg-gradient-dark" data-bs-dismiss="modal">Batal</button>
+          <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+            <button type="submit" role="button" class="btn btn-sm bg-gradient-primary text-white">Ya
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 
   {% include "includes/scripts.html" %}

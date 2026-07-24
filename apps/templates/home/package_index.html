@@ -5,6 +5,7 @@
 {% block content %}
 
 {% load humanize %}
+{% load user_agents %}
 
 <!-- Page content -->
 <div class="container-fluid py-0">
@@ -12,11 +13,22 @@
         <div class="col-12">
             <div class="card mb-4 p-4">
                 <div class="row mb-4">
-                    <div class="col-6 d-flex align-items-center">
+                    <div class="{% if request|is_mobile %}col-11{% else %}col-6{% endif %} d-flex align-items-center">
                         <h4 class="mb-0">Paket</h4>
                     </div>
-                    <div class="col-6 text-end">
+                    <div class="{% if request|is_mobile %}col-1{% else %}col-6{% endif %} text-end">
+                        {% if request|is_mobile %}
+                        <div class="dropdown float-lg-end pe-2 {% if not btn.add and not request.user.is_superuser %}d-none{% endif %}">
+                            <a class="cursor-pointer text-body" id="dropdownTable">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
+                                <li><a class="dropdown-item border-radius-md" href="{% url 'package-add' %}">Buat Paket Baru</a></li>
+                            </ul>
+                        </div>
+                        {% else %}
                         <a class="btn btn-sm bg-gradient-primary mb-0 {% if not btn.add and not request.user.is_superuser %}disabled{% endif %}" href="{% url 'package-add' %}"><i class="fas fa-plus"></i>&nbsp;&nbsp;Buat Paket Baru</a>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="card-body px-0 pt-0 pb-2">
@@ -38,7 +50,7 @@
                             </thead>
                             <tbody>
                                 {% for item in data %}
-                                <tr data-href="{% url 'package-view' item.package_id %}" class="cursor-pointer">
+                                <tr data-href="{% url 'package-view' item.package_id %}" data-id="{{ item.package_id }}" class="cursor-pointer">
                                     <td>
                                         <div class="d-flex pe-2 py-0">
                                             <div class="d-flex flex-column justify-content-center">
@@ -72,6 +84,44 @@
     </div>
 </div>
 
+<!-- Context Menu -->
+<div id="context-menu" class="context-menu" style="display: none;">
+    <ul class="context-menu-list">
+        <li id="btn-duplicate" class="context-menu-item">
+            <i class="fas fa-copy me-2"></i>Duplikasi
+        </li>
+    </ul>
+</div>
+
+<!-- Modal Duplikasi -->
+<div class="modal fade" id="duplicateModal" tabindex="-1" role="dialog" aria-labelledby="duplicateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="duplicateModalLabel">Duplikasi Paket</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-control-label">ID Paket Asli</label>
+                    <input type="text" class="form-control form-control-sm" id="originalPackageId" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-control-label">ID Paket Baru <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm text-uppercase" id="newPackageId" placeholder="Masukkan ID Paket baru" autofocus>
+                    <div class="text-danger text-sm mt-1" id="duplicateError" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn bg-gradient-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn bg-gradient-primary btn-sm" id="btnSubmitDuplicate">
+                    <i class="fas fa-copy me-1"></i>Duplikasi
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock content %}
 
 {% block javascripts %}
@@ -93,12 +143,11 @@
             }
         });
 
-        $(document).on('click', 'tbody tr', function() {
+        $(document).on('click', 'tbody tr', function(e) {
+            if ($(e.target).closest('.context-menu').length) return;
             var href = $(this).data('href');
-            if(href) { // Check if href data exists
+            if(href) {
                 window.location = href;
-            } else {
-                console.log("No data in href");
             }
         });
 
@@ -106,7 +155,127 @@
         for (const button of btn) {
             button.classList.add('border-radius-top-start-circle', 'border-radius-bottom-end-circle', 'border-radius-top-end-circle', 'border-radius-bottom-start-circle');
         }
-    } );
+    });
+
+    let btn_menu = document.getElementById('dropdownTable');
+    if (btn_menu) {
+        btn_menu.addEventListener('click', function() {
+            this.nextElementSibling.classList.toggle('show');
+        });
+    }
+
+    // Context Menu
+    const contextMenu = document.getElementById('context-menu');
+    let selectedPackageId = null;
+
+    document.addEventListener('contextmenu', function(e) {
+        const row = e.target.closest('tbody tr');
+        if (row && row.dataset.id) {
+            e.preventDefault();
+            selectedPackageId = row.dataset.id;
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = e.pageX + 'px';
+            contextMenu.style.top = e.pageY + 'px';
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!contextMenu.contains(e.target)) {
+            contextMenu.style.display = 'none';
+        }
+    });
+
+    // Duplikasi
+    $('#btn-duplicate').on('click', function() {
+        contextMenu.style.display = 'none';
+        if (selectedPackageId) {
+            $('#originalPackageId').val(selectedPackageId);
+            $('#newPackageId').val('');
+            $('#duplicateError').hide();
+            $('#duplicateModal').modal('show');
+        }
+    });
+
+    $('#duplicateModal').on('shown.bs.modal', function() {
+        $('#newPackageId').focus();
+    });
+
+    $('#btnSubmitDuplicate').on('click', function() {
+        const newId = $('#newPackageId').val().trim();
+        const originalId = $('#originalPackageId').val();
+
+        if (!newId) {
+            $('#duplicateError').text('ID Paket baru tidak boleh kosong').show();
+            return;
+        }
+
+        if (newId.toUpperCase() === originalId.toUpperCase()) {
+            $('#duplicateError').text('ID Paket baru tidak boleh sama dengan ID asli').show();
+            return;
+        }
+
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Memproses...');
+
+        $.ajax({
+            url: '{% url "package-duplicate" %}',
+            type: 'POST',
+            data: {
+                'original_package_id': originalId,
+                'new_package_id': newId,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            },
+            success: function(response) {
+                if (response.status === 'success') {
+                    $('#duplicateModal').modal('hide');
+                    window.location.href = response.redirect;
+                } else {
+                    $('#duplicateError').text(response.message).show();
+                    btn.prop('disabled', false).html('<i class="fas fa-copy me-1"></i>Duplikasi');
+                }
+            },
+            error: function(xhr) {
+                const response = xhr.responseJSON;
+                const message = response ? response.message : 'Terjadi kesalahan';
+                $('#duplicateError').text(message).show();
+                btn.prop('disabled', false).html('<i class="fas fa-copy me-1"></i>Duplikasi');
+            }
+        });
+    });
+
+    $('#newPackageId').on('keypress', function(e) {
+        if (e.which === 13) {
+            $('#btnSubmitDuplicate').click();
+        }
+    });
 </script>
+
+<style>
+    .context-menu {
+        position: absolute;
+        z-index: 9999;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        padding: 6px 0;
+        min-width: 160px;
+    }
+    .context-menu-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .context-menu-item {
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        color: #344767;
+        display: flex;
+        align-items: center;
+    }
+    .context-menu-item:hover {
+        background: #f0f2f5;
+    }
+</style>
 
 {% endblock javascripts %}

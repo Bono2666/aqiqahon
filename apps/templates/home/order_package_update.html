@@ -26,10 +26,10 @@
                             <div class="{% if request|is_mobile %}col-1{% else %}col-3{% endif %} text-end">
                                 {% if request|is_mobile %}
                                     <div class="dropdown float-lg-end pe-2">
-                                        <a class="cursor-pointer text-body" id="dropdownTable" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <a class="cursor-pointer text-body" id="dropdownTable">
                                             <i class="fas fa-ellipsis-v"></i>
                                         </a>
-                                        <ul class="dropdown-menu px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
+                                        <ul class="dropdown-menu dropdown-menu-end px-2 py-3 ms-sm-n4 ms-n5" aria-labelledby="dropdownTable">
                                             {% if not first_package %}
                                             <li><button class="dropdown-item border-radius-md" type="button" data-bs-toggle="modal" data-bs-target="#delpack-{{ data.id }}">Hapus</button></li>
                                             {% endif %}
@@ -472,7 +472,6 @@
     let form = document.getElementById('form-add');
     let select_addon = document.getElementById('addon');
     let btn_menu = document.getElementById('dropdownTable');
-    let dropdown_menu = document.getElementsByClassName('dropdown-menu');
     let c = document.querySelectorAll('.checks');
     let q = document.querySelectorAll('.qty');
     let save_souvenir = document.getElementById('save-souvenir');
@@ -483,64 +482,74 @@
     let souvenir = document.getElementById('souvenir');
     let souvenirs = "{{ souvenirs }}";
 
-    add.addEventListener('click', function() {
-        if (souvenirs) {
+    if (add) {
+        add.addEventListener('click', function() {
+            if (souvenirs) {
+                if (souvenir == 'Pilih Souvenir') {
+                    alert('Silakan pilih souvenir terlebih dahulu');
+                    return false;
+                }    
+            }
+            form.action = "{% url 'order-package-update' order_id data.id cat pack type 1 %}";
+            form.submit();
+        });
+    }
+
+    if (next) {
+        next.addEventListener('click', function() {
             if (souvenir == 'Pilih Souvenir') {
                 alert('Silakan pilih souvenir terlebih dahulu');
+                event.preventDefault();
                 return false;
-            }    
-        }
-        form.action = "{% url 'order-package-update' order_id data.id cat pack type 1 %}";
-        form.submit();
-    });
+            } else {
+                form.action = "{% url 'order-package-update' order_id data.id cat pack type 0 %}";
+                form.submit();
+            }
+        });
+    }
 
-    next.addEventListener('click', function() {
-        if (souvenir == 'Pilih Souvenir') {
-            alert('Silakan pilih souvenir terlebih dahulu');
-            event.preventDefault();
-            return false;
-        } else {
-            form.action = "{% url 'order-package-update' order_id data.id cat pack type 0 %}";
+    if (portion) {
+        portion.addEventListener('change', function() {
+            if (portion.value < 1) {
+                alert('Jumlah box/porsi tidak boleh kurang dari 1');
+                portion.value = box_qty;
+            }
+            if (portion.value > box_qty) {
+                alert('Jumlah box/porsi tidak boleh lebih dari ' + box_qty);
+                portion.value = box_qty;
+            }
+        });
+    }
+
+    if (save_souvenir) {
+        save_souvenir.addEventListener('click', function() {
+            let check = [];
+            let qty = [];
+            c.forEach(function(checkbox, index) {
+                if (c[index].checked == true) {
+                    check.push(c[index].value);
+                    qty.push(q[index].value);
+                }
+            });
+            form.action = "{% url 'order-package-update' order_id data.id cat pack type 3 %}?checks=" + check + "&qty=" + qty;
             form.submit();
-        }
-    });
-
-    portion.addEventListener('change', function() {
-        if (portion.value < 1) {
-            alert('Jumlah box/porsi tidak boleh kurang dari 1');
-            portion.value = box_qty;
-        }
-        if (portion.value > box_qty) {
-            alert('Jumlah box/porsi tidak boleh lebih dari ' + box_qty);
-            portion.value = box_qty;
-        }
-    });
-
-    save_souvenir.addEventListener('click', function() {
-        let check = [];
-        let qty = [];
-        c.forEach(function(checkbox, index) {
-            if (c[index].checked == true) {
-                check.push(c[index].value);
-                qty.push(q[index].value);
-            }
         });
-        form.action = "{% url 'order-package-update' order_id data.id cat pack type 3 %}?checks=" + check + "&qty=" + qty;
-        form.submit();
-    });
+    }
 
-    save.addEventListener('click', function() {
-        let check = [];
-        let qty = [];
-        c.forEach(function(checkbox, index) {
-            if (c[index].checked == true) {
-                check.push(c[index].value);
-                qty.push(q[index].value);
-            }
+    if (save) {
+        save.addEventListener('click', function() {
+            let check = [];
+            let qty = [];
+            c.forEach(function(checkbox, index) {
+                if (c[index].checked == true) {
+                    check.push(c[index].value);
+                    qty.push(q[index].value);
+                }
+            });
+            form.action = "{% url 'order-package-update' order_id data.id cat pack type 2 %}?checks=" + check + "&qty=" + qty;
+            form.submit();
         });
-        form.action = "{% url 'order-package-update' order_id data.id cat pack type 2 %}?checks=" + check + "&qty=" + qty;
-        form.submit();
-    });
+    }
     
     c.forEach(function(checkbox, index) {
         checkbox.addEventListener('click', function() {
@@ -565,9 +574,11 @@
     });
 
     // open dropdown menu
-    btn_menu.addEventListener('click', function() {
-        dropdown_menu[0].classList.toggle('show');
-    });
+    if (btn_menu) {
+        btn_menu.addEventListener('click', function() {
+            this.nextElementSibling.classList.toggle('show');
+        });
+    }
 
     $(document).ready(function() {
         $('#type').change(function() {

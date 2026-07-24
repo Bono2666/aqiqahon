@@ -25,16 +25,18 @@
                             </div>
                             <div class="col-4 text-end">
                                 {% if request|is_mobile %}
+                                    {% if cat != '0' and pack != '0' %}
                                     <div class="dropdown float-lg-end pe-2">
-                                        <a class="cursor-pointer text-body" id="dropdownTable" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <a class="cursor-pointer text-body" id="dropdownTable">
                                             <i class="fas fa-ellipsis-v"></i>
                                         </a>
-                                        <ul class="dropdown-menu px-2 py-3 ms-sm-n4 ms-n5 z-index-3" aria-labelledby="dropdownTable">
+                                        <ul class="dropdown-menu dropdown-menu-end px-2 py-3 ms-sm-n4 ms-n5" aria-labelledby="dropdownTable">
                                             <li><button id="add" type="button" class="dropdown-item border-radius-md">Tambah Paket</button></li>
                                         </ul>
                                     </div>
+                                    {% endif %}
                                 {% else %}
-                                    <button id="add" type="button" class="btn btn-sm bg-gradient-dark mb-0 px-4"><i class="fas fa-plus"></i>&nbsp;&nbsp;Tambah Paket</button>
+                                    <button id="add" type="button" class="btn btn-sm bg-gradient-dark mb-0 px-4{% if cat == '0' or pack == '0' %} disabled{% endif %}"><i class="fas fa-plus"></i>&nbsp;&nbsp;Tambah Paket</button>
                                 {% endif %}
                             </div>
                         </div>
@@ -440,7 +442,6 @@
 {% endblock content %}
 
 {% block javascripts %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     $(document).ready(function() {
         $('#menuTable').DataTable({
@@ -458,7 +459,6 @@
     let add = document.getElementById('add');
     let form = document.getElementById('form-add');
     let btn_menu = document.getElementById('dropdownTable');
-    let dropdown_menu = document.getElementsByClassName('dropdown-menu');
     let c = document.querySelectorAll('.checks');
     let q = document.querySelectorAll('.qty');
     let save_souvenir = document.getElementById('save-souvenir');
@@ -466,34 +466,40 @@
     let portion = document.getElementById('id-box');
     let box_qty = parseInt('{{ selected_package.box }}');
 
-    add.addEventListener('click', function() {
-        form.action = "{% url 'order-package-add' order_id cat pack type 1 %}";
-        form.submit();
-    });
+    if (add) {
+        add.addEventListener('click', function() {
+            form.action = "{% url 'order-package-add' order_id cat pack type 1 %}";
+            form.submit();
+        });
+    }
 
-    portion.addEventListener('change', function() {
-        if (portion.value < 1) {
-            alert('Jumlah box/porsi tidak boleh kurang dari 1');
-            portion.value = box_qty;
-        }
-        if (portion.value > box_qty) {
-            alert('Jumlah box/porsi tidak boleh lebih dari ' + box_qty);
-            portion.value = box_qty;
-        }
-    });
-
-    save.addEventListener('click', function() {
-        let check = [];
-        let qty = [];
-        c.forEach(function(checkbox, index) {
-            if (c[index].checked == true) {
-                check.push(c[index].value);
-                qty.push(q[index].value);
+    if (portion) {
+        portion.addEventListener('change', function() {
+            if (portion.value < 1) {
+                alert('Jumlah box/porsi tidak boleh kurang dari 1');
+                portion.value = box_qty;
+            }
+            if (portion.value > box_qty) {
+                alert('Jumlah box/porsi tidak boleh lebih dari ' + box_qty);
+                portion.value = box_qty;
             }
         });
-        form.action = "{% url 'order-package-add' order_id cat pack type 2 %}?checks=" + check + "&qty=" + qty;
-        form.submit();
-    });
+    }
+
+    if (save) {
+        save.addEventListener('click', function() {
+            let check = [];
+            let qty = [];
+            c.forEach(function(checkbox, index) {
+                if (c[index].checked == true) {
+                    check.push(c[index].value);
+                    qty.push(q[index].value);
+                }
+            });
+            form.action = "{% url 'order-package-add' order_id cat pack type 2 %}?checks=" + check + "&qty=" + qty;
+            form.submit();
+        });
+    }
     
     c.forEach(function(checkbox, index) {
         checkbox.addEventListener('click', function() {
@@ -518,9 +524,11 @@
     });
 
     // open dropdown menu
-    btn_menu.addEventListener('click', function() {
-        dropdown_menu[0].classList.toggle('show');
-    });
+    if (btn_menu) {
+        btn_menu.addEventListener('click', function() {
+            this.nextElementSibling.classList.toggle('show');
+        });
+    }
 
     $(document).ready(function() {
         $('#type').change(function() {

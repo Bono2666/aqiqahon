@@ -369,6 +369,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
     var isLoadingEvents = false;
 
+    var urlPatterns = {
+        view: "{% url 'order-view' '___' 0 0 0 0 %}",
+        invoice: "{% url 'order-invoice' '___' %}",
+        bap: "{% url 'order-bap' '___' %}",
+        checklist: "{% url 'order-checklist' '___' %}"
+    };
+
     function loadCalendarEvents() {
         if (isLoadingEvents) return;
         if (typeof calendar === 'undefined' || !calendar) return;
@@ -575,11 +582,17 @@ document.addEventListener('DOMContentLoaded', function() {
             badgeEl.textContent = scheduleStatusLabels[props.schedule_status] || 'Belum Dijadwalkan';
             badgeEl.style.backgroundColor = scheduleStatusColors[props.schedule_status] || '#6c757d';
 
-            var orderId = encodeURIComponent(props.order_id);
-            document.getElementById('btn-view').href = '/order/view/' + orderId + '/0/0/0/0/';
-            document.getElementById('btn-invoice').href = '/order/invoice/' + orderId + '/';
-            document.getElementById('btn-bap').href = '/order/bap/' + orderId + '/';
-            document.getElementById('btn-checklist').href = '/order/checklist/' + orderId + '/';
+            var orderId = props.order_id;
+            document.getElementById('btn-view').href = urlPatterns.view.replace('___', orderId);
+            if (props.status !== 'DRAFT' && props.status !== 'BATAL') {
+                document.getElementById('btn-invoice').href = urlPatterns.invoice.replace('___', orderId);
+                document.getElementById('btn-bap').href = urlPatterns.bap.replace('___', orderId);
+                document.getElementById('btn-checklist').href = urlPatterns.checklist.replace('___', orderId);
+            } else {
+                document.getElementById('btn-invoice').href = '#';
+                document.getElementById('btn-bap').href = '#';
+                document.getElementById('btn-checklist').href = '#';
+            }
 
             window._currentOrderId = props.order_id;
             window._currentEventInfo = info;

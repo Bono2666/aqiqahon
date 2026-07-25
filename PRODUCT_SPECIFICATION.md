@@ -79,6 +79,7 @@
 | ORDER         | Pesanan             |
 | ORDER-ARCHIVE | Arsip Pesanan       |
 | CASH-IN       | Uang Masuk          |
+| CLEANUP       | Clean Up PDF        |
 
 ---
 
@@ -181,6 +182,15 @@
 - Checklist item per paket
 - Rincian komposisi (nasi, masakan utama, sub, side 1-5, other, addon, minuman, sertifikat, tas, souvenir)
 - Sisa masakan olahan daging dan tulangan
+
+**Clean Up PDF:**
+
+- Ikon broom di top navigation bar dengan badge jumlah file PDF
+- Badge: `bg-gradient-danger`, muncul otomatis jika count > 0, hilang jika 0
+- Endpoint info: `GET /cleanup/` → `{count: N, files: [...]}`
+- Endpoint hapus: `POST /cleanup/execute/` → `{success, deleted, errors}`
+- Akses: role `CLEANUP` atau superuser
+- Pola file: `INVOICE_*.pdf`, `SURAT_JALAN_*.pdf`, `CHECKLIST_*.pdf` di BASE_DIR
 
 ### 4.2 Keuangan (Finance)
 
@@ -1258,6 +1268,13 @@ else:
 | `/cashin/remove-evidence/<id>/` | `remove_evidence` | Hapus bukti       |
 | `/cashin/delete/<id>/`          | `cashin_delete`   | Hapus pembayaran  |
 
+### Clean Up PDF
+
+| Endpoint            | View              | Keterangan             |
+| ------------------- | ----------------- | ---------------------- |
+| `/cleanup/`         | `cleanup_pdf_info`| Info jumlah file PDF   |
+| `/cleanup/execute/` | `cleanup_pdf`     | Hapus file PDF sementara |
+
 ---
 
 ## 9. UI/UX Specification
@@ -1276,6 +1293,7 @@ else:
 - Tiga bagian utama: Transaksi, Keuangan, Data Master
 - Visibilitas menu berdasarkan role pengguna (RBAC)
 - Badge notifikasi pada sidebar (jumlah pesanan `draft`)
+- Badge jumlah file PDF pada ikon Clean Up di top navigation bar (ikon broom, `bg-gradient-danger`, otomatis tampil/sembunyi)
 - SVG icons untuk setiap menu
 
 ### 9.3 Components

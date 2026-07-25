@@ -195,9 +195,12 @@ body:not(.dark-page) .reminder-empty {
         </li>
 
         {% if 'CLEANUP' in role or request.user.is_superuser %}
-        <li class="nav-item pe-2 px-3 d-flex align-items-center">
-          <a href="javascript:void(0)" class="nav-link text-body p-0 m-0" id="cleanupBtn" data-toggle="tooltip" data-original-title="Clean Up PDF">
+        <li class="nav-item pe-2 px-3 d-flex align-items-center position-relative">
+          <a href="javascript:void(0)" class="nav-link text-body p-0 m-0 position-relative" id="cleanupBtn" data-toggle="tooltip" data-original-title="Clean Up PDF">
             <i class="fa fa-broom fixed-plugin-button-nav cursor-pointer"></i>
+            <span id="cleanup-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-gradient-danger d-none" style="font-size: 0.6rem; padding: 2px 5px;">
+              <span id="cleanup-count">0</span>
+            </span>
           </a>
         </li>
         {% endif %}
@@ -446,6 +449,24 @@ body:not(.dark-page) .reminder-empty {
     });
   }
 
+  function updateCleanupBadge() {
+    fetch("{% url 'cleanup-pdf-info' %}")
+      .then(function(resp) { return resp.json(); })
+      .then(function(data) {
+        var badge = document.getElementById('cleanup-badge');
+        var countEl = document.getElementById('cleanup-count');
+        if (data.count > 0) {
+          countEl.textContent = data.count;
+          badge.classList.remove('d-none');
+        } else {
+          badge.classList.add('d-none');
+        }
+      })
+      .catch(function() {});
+  }
+
+  updateCleanupBadge();
+
   var cleanupBtn = document.getElementById('cleanupBtn');
   if (cleanupBtn) {
     cleanupBtn.addEventListener('click', function() {
@@ -503,6 +524,7 @@ body:not(.dark-page) .reminder-empty {
             }
             resultEl.classList.remove('d-none');
             document.getElementById('cleanup-close-btn').disabled = false;
+            updateCleanupBadge();
           }, 500);
         })
         .catch(function() {

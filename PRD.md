@@ -38,6 +38,7 @@ AqiqahOn adalah **sistem manajemen bisnis aqiqah** (layanan penyembelihan & peng
 | **Promo**                 | `PROMO`    | Mengelola promosi dan hadiah                     |
 | **Pelanggan**             | `CUSTOMER` | Mengelola data pelanggan                         |
 | **Regional**              | `REGION`   | Mengelompokkan area penjualan                    |
+| **Clean Up**              | `CLEANUP`  | Membersihkan file PDF sementara                  |
 
 ### 2.2 Sistem Otorisasi
 
@@ -364,6 +365,26 @@ Checklist Form untuk driver & checker:
 - Checklist item: beras, masakan utama, sub, side 1-5, other, addon, minuman, sertifikat, tas, souvenir, promo, BAP & kwitansi
 - Kolom: DI ISI OLEH DRIVER | DI ISI OLEH CHECKER
 - Kolom catatan & tanda tangan
+
+#### 3.6.4 Clean Up PDF (`/cleanup/`)
+
+Fitur untuk membersihkan file PDF sementara yang dihasilkan dari generate Invoice, BAP, dan Checklist.
+
+| Item | Detail |
+|------|--------|
+| Tombol | Ikon broom di top navigation bar |
+| Badge | Badge jumlah file PDF (merah, `bg-gradient-danger`) |
+| Akses | Role `CLEANUP` atau superuser |
+| Pola file | `INVOICE_*.pdf`, `SURAT_JALAN_*.pdf`, `CHECKLIST_*.pdf` |
+| Lokasi file | Root directory project (`settings.BASE_DIR`) |
+
+**Fitur:**
+
+- Badge pada ikon Clean Up menampilkan jumlah file PDF sementara
+- Badge otomatis muncul jika ada file, otomatis hilang jika 0
+- Klik ikon → modal menampilkan daftar file yang ditemukan
+- Konfirmasi hapus → semua file PDF sementara dihapus dari disk
+- Badge ter-update setelah proses hapus
 
 ### 3.7 Fitur Promo
 
@@ -1359,6 +1380,8 @@ Auto-tracking via `crum.get_current_user()` di method `save()`.
 | `/order/invoice/<id>/`   | `order_invoice`   | Generate Invoice PDF   |
 | `/order/bap/<id>/`       | `order_bap`       | Generate BAP PDF       |
 | `/order/checklist/<id>/` | `order_checklist` | Generate Checklist PDF |
+| `/cleanup/`              | `cleanup_pdf_info`| Info file PDF          |
+| `/cleanup/execute/`      | `cleanup_pdf`     | Hapus file PDF         |
 
 ### 6.8 Jadwal Pesanan
 

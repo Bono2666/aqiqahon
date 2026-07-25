@@ -273,4 +273,6 @@ urlpatterns = [
     path('jadwal/events/', views.jadwal_events, name='jadwal-events'),
     path('jadwal/save/<path:order_id>/', views.jadwal_save, name='jadwal-save'),
     path('jadwal/reminders/', views.jadwal_reminders, name='jadwal-reminders'),
+    path('cleanup/', views.cleanup_pdf_info, name='cleanup-pdf-info'),
+    path('cleanup/execute/', views.cleanup_pdf, name='cleanup-pdf'),
 ]

@@ -1,6 +1,8 @@
 import datetime as dt
 from datetime import date, timedelta
+import glob
 import json
+import os
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.db import connection, IntegrityError
@@ -8030,3 +8032,45 @@ def jadwal_reminders(request):
                 })
 
     return JsonResponse({'reminders': reminders, 'count': len(reminders)})
+
+
+@login_required(login_url='/login/')
+def cleanup_pdf_info(request):
+    if not request.user.is_superuser:
+        has_access = Auth.objects.filter(
+            user_id=request.user.user_id, menu_id='CLEANUP').exists()
+        if not has_access:
+            return JsonResponse({'error': 'Tidak memiliki akses'}, status=403)
+
+    patterns = ['INVOICE_*.pdf', 'SURAT_JALAN_*.pdf', 'CHECKLIST_*.pdf']
+    files = []
+    for pattern in patterns:
+        files.extend(glob.glob(os.path.join(settings.BASE_DIR, pattern)))
+
+    file_names = [os.path.basename(f) for f in files]
+    return JsonResponse({'count': len(file_names), 'files': file_names})
+
+
+@login_required(login_url='/login/')
+def cleanup_pdf(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    if not request.user.is_superuser:
+        has_access = Auth.objects.filter(
+            user_id=request.user.user_id, menu_id='CLEANUP').exists()
+        if not has_access:
+            return JsonResponse({'error': 'Tidak memiliki akses'}, status=403)
+
+    patterns = ['INVOICE_*.pdf', 'SURAT_JALAN_*.pdf', 'CHECKLIST_*.pdf']
+    deleted = 0
+    errors = []
+    for pattern in patterns:
+        for filepath in glob.glob(os.path.join(settings.BASE_DIR, pattern)):
+            try:
+                os.remove(filepath)
+                deleted += 1
+            except Exception as e:
+                errors.append(os.path.basename(filepath))
+
+    return JsonResponse({'success': True, 'deleted': deleted, 'errors': errors})

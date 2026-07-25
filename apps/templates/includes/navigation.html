@@ -193,6 +193,14 @@ body:not(.dark-page) .reminder-empty {
             </div>
           </div>
         </li>
+
+        {% if 'CLEANUP' in role or request.user.is_superuser %}
+        <li class="nav-item pe-2 px-3 d-flex align-items-center">
+          <a href="javascript:void(0)" class="nav-link text-body p-0 m-0" id="cleanupBtn" data-toggle="tooltip" data-original-title="Clean Up PDF">
+            <i class="fa fa-broom fixed-plugin-button-nav cursor-pointer"></i>
+          </a>
+        </li>
+        {% endif %}
         
         <button class="font-weight-bold button text-body text-sm ps-4 border-0 bg-transparent" data-bs-toggle="modal" {% if crud != 'add' and crud != 'update' %}data-bs-target="#confirm"{% endif %}>
           Logout
@@ -229,6 +237,43 @@ body:not(.dark-page) .reminder-empty {
   </div>
 </nav>
 <!-- End Navbar -->
+
+{% if 'CLEANUP' in role or request.user.is_superuser %}
+<!-- Modal Clean Up PDF -->
+<div class="modal fade" id="cleanupModal" tabindex="-1" role="dialog" aria-labelledby="cleanupModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cleanupModalLabel">Clean Up PDF</h5>
+        <button type="button" class="btn-close btn-close-dark" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="cleanup-info">
+          <p class="mb-2">Memuat informasi file PDF...</p>
+          <div class="progress" style="height: 6px;">
+            <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+          </div>
+        </div>
+        <div id="cleanup-progress" class="d-none">
+          <p id="cleanup-progress-text" class="mb-2"></p>
+          <div class="progress" style="height: 6px;">
+            <div id="cleanup-progress-bar" class="progress-bar bg-gradient-warning progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+          </div>
+        </div>
+        <div id="cleanup-result" class="d-none">
+          <div id="cleanup-result-content"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-sm bg-gradient-dark" data-bs-dismiss="modal" id="cleanup-close-btn">Tutup</button>
+        <button type="button" class="btn btn-sm bg-gradient-danger text-white d-none" id="cleanup-execute-btn">
+          <i class="fas fa-trash me-1"></i>Hapus Semua
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 
 <script>
@@ -398,6 +443,77 @@ body:not(.dark-page) .reminder-empty {
   if (overlay) {
     overlay.addEventListener('click', function() {
       closeMobileSidebar();
+    });
+  }
+
+  var cleanupBtn = document.getElementById('cleanupBtn');
+  if (cleanupBtn) {
+    cleanupBtn.addEventListener('click', function() {
+      var modal = new bootstrap.Modal(document.getElementById('cleanupModal'));
+      modal.show();
+
+      document.getElementById('cleanup-info').classList.remove('d-none');
+      document.getElementById('cleanup-progress').classList.add('d-none');
+      document.getElementById('cleanup-result').classList.add('d-none');
+      document.getElementById('cleanup-execute-btn').classList.add('d-none');
+      document.getElementById('cleanup-close-btn').textContent = 'Tutup';
+
+      fetch("{% url 'cleanup-pdf-info' %}")
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+          var infoEl = document.getElementById('cleanup-info');
+          if (data.count === 0) {
+            infoEl.innerHTML = '<p class="mb-0 text-dark">Tidak ada file PDF yang perlu dibersihkan.</p>';
+          } else {
+            var listHtml = '<ul class="list-unstyled mb-2" style="max-height: 200px; overflow-y: auto;">';
+            data.files.forEach(function(f) { listHtml += '<li class="text-sm"><i class="fas fa-file-pdf text-danger me-1"></i>' + f + '</li>'; });
+            listHtml += '</ul>';
+            infoEl.innerHTML = '<p class="mb-2">Ditemukan <strong>' + data.count + '</strong> file PDF:</p>' + listHtml;
+            document.getElementById('cleanup-execute-btn').classList.remove('d-none');
+          }
+        })
+        .catch(function() {
+          document.getElementById('cleanup-info').innerHTML = '<p class="mb-0 text-danger"><i class="fas fa-exclamation-circle me-1"></i>Gagal memuat informasi file.</p>';
+        });
+    });
+
+    document.getElementById('cleanup-execute-btn').addEventListener('click', function() {
+      document.getElementById('cleanup-info').classList.add('d-none');
+      document.getElementById('cleanup-execute-btn').classList.add('d-none');
+      document.getElementById('cleanup-progress').classList.remove('d-none');
+      document.getElementById('cleanup-close-btn').disabled = true;
+
+      var progressBar = document.getElementById('cleanup-progress-bar');
+      var progressText = document.getElementById('cleanup-progress-text');
+      progressText.textContent = 'Menghapus file PDF...';
+      progressBar.style.width = '30%';
+
+      fetch("{% url 'cleanup-pdf' %}", { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' } })
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+          progressBar.style.width = '100%';
+          setTimeout(function() {
+            document.getElementById('cleanup-progress').classList.add('d-none');
+            var resultEl = document.getElementById('cleanup-result');
+            var contentEl = document.getElementById('cleanup-result-content');
+            if (data.success) {
+              contentEl.innerHTML = '<p class="mb-0 text-dark"><i class="fas fa-check-circle me-1"></i>Berhasil menghapus <strong>' + data.deleted + '</strong> file PDF.</p>';
+            } else {
+              contentEl.innerHTML = '<p class="mb-0 text-danger"><i class="fas fa-exclamation-circle me-1"></i>Gagal menghapus file.</p>';
+            }
+            resultEl.classList.remove('d-none');
+            document.getElementById('cleanup-close-btn').disabled = false;
+          }, 500);
+        })
+        .catch(function() {
+          progressBar.style.width = '100%';
+          setTimeout(function() {
+            document.getElementById('cleanup-progress').classList.add('d-none');
+            document.getElementById('cleanup-result').innerHTML = '<p class="mb-0 text-danger"><i class="fas fa-exclamation-circle me-1"></i>Terjadi kesalahan saat menghapus file.</p>';
+            document.getElementById('cleanup-result').classList.remove('d-none');
+            document.getElementById('cleanup-close-btn').disabled = false;
+          }, 500);
+        });
     });
   }
 })();

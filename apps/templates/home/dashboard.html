@@ -360,21 +360,7 @@
                   </td>
                 </tr>
                 {% endfor %}
-                {% for item in addon_kemasan %}
-                <tr>
-                  <td>
-                    <div class="d-flex px-2 py-1">
-                      <div class="d-flex flex-column justify-content-center">
-                        <h6 class="mb-0 text-sm">{{ item.equipment__equipment_name }}</h6>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="align-middle text-end pe-3">
-                    <span class="badge bg-gradient-dark">{{ item.total }}</span>
-                  </td>
-                </tr>
-                {% endfor %}
-                {% if not recap_box_items and not addon_kemasan %}
+                {% if not recap_box_items %}
                 <tr>
                   <td colspan="2" class="text-center text-muted text-sm py-3">Belum ada data</td>
                 </tr>
@@ -415,21 +401,7 @@
                   </td>
                 </tr>
                 {% endfor %}
-                {% for item in addon_masakan %}
-                <tr>
-                  <td>
-                    <div class="d-flex px-2 py-1">
-                      <div class="d-flex flex-column justify-content-center">
-                        <h6 class="mb-0 text-sm">{{ item.equipment__equipment_name }}</h6>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="align-middle text-end pe-3">
-                    <span class="badge bg-gradient-dark">{{ item.total }}</span>
-                  </td>
-                </tr>
-                {% endfor %}
-                {% if not recap_masakan and not addon_masakan %}
+                {% if not recap_masakan %}
                 <tr>
                   <td colspan="2" class="text-center text-muted text-sm py-3">Belum ada data</td>
                 </tr>
@@ -470,21 +442,7 @@
                   </td>
                 </tr>
                 {% endfor %}
-                {% for item in addon_olahan %}
-                <tr>
-                  <td>
-                    <div class="d-flex px-2 py-1">
-                      <div class="d-flex flex-column justify-content-center">
-                        <h6 class="mb-0 text-sm">{{ item.equipment__equipment_name }}</h6>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="align-middle text-end pe-3">
-                    <span class="badge bg-gradient-dark">{{ item.total }}</span>
-                  </td>
-                </tr>
-                {% endfor %}
-                {% if not recap_menu_olahan and not addon_olahan %}
+                {% if not recap_menu_olahan %}
                 <tr>
                   <td colspan="2" class="text-center text-muted text-sm py-3">Belum ada data</td>
                 </tr>

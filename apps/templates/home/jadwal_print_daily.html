@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Jadwal Harian</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 15mm 10mm;
+        }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 8pt;
+            color: #000;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #FF8C42;
+            padding-bottom: 8px;
+        }
+        .header h1 {
+            font-size: 16pt;
+            margin: 0 0 4px 0;
+            color: #333;
+        }
+        .header .info {
+            font-size: 9pt;
+            color: #555;
+        }
+        .header .info span {
+            margin: 0 12px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 6px;
+        }
+        th {
+            background-color: #FF8C42;
+            color: #fff;
+            font-size: 7pt;
+            font-weight: bold;
+            padding: 5px 3px;
+            border: 1px solid #ddd;
+            text-align: center;
+            vertical-align: middle;
+        }
+        td {
+            padding: 4px 3px;
+            border: 1px solid #ddd;
+            font-size: 7pt;
+            vertical-align: top;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .col-no { width: 25px; text-align: center; }
+        .col-driver { width: 70px; }
+        .col-goat { width: 85px; }
+        .col-jumlah { width: 50px; text-align: center; }
+        .col-tanggal { width: 100px; }
+        .col-masakan { width: 150px; }
+        .col-box { width: 40px; text-align: center; }
+        .col-nama { width: 100px; }
+        .col-sisa { width: 80px; }
+        .col-berangkat { width: 55px; text-align: center; }
+        .col-tiba { width: 45px; text-align: center; }
+        .col-cabang { width: 80px; }
+        .col-alamat { width: 110px; }
+        .footer {
+            margin-top: 10px;
+            text-align: right;
+            font-size: 8pt;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>JADWAL PESANAN HARIAN</h1>
+        <div class="info">
+            <span>Periode: <strong>{{ periode }}</strong></span>
+            <span>|</span>
+            <span>Dicetak: <strong>{{ print_date }}</strong></span>
+            <span>|</span>
+            <span>Total: <strong>{{ schedule_data|length }}</strong> pesanan</span>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th class="col-no">No.</th>
+                <th class="col-driver">Driver</th>
+                <th class="col-goat">Jenis Kambing</th>
+                <th class="col-jumlah">Jumlah Kambing</th>
+                <th class="col-tanggal">Hari &amp; Tanggal Kirim</th>
+                <th class="col-masakan">Masakan &amp; Menu Olahan</th>
+                <th class="col-box">Jumlah Box</th>
+                <th class="col-nama">Nama Pemesan</th>
+                <th class="col-sisa">Sisa Masakan</th>
+                <th class="col-berangkat">Jam Berangkat</th>
+                <th class="col-tiba">Jam Tiba</th>
+                <th class="col-cabang">Cabang</th>
+                <th class="col-alamat">Alamat</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in schedule_data %}
+            <tr>
+                <td class="col-no">{{ item.no }}</td>
+                <td>{{ item.driver }}</td>
+                <td>{{ item.goat_type }}</td>
+                <td class="col-jumlah">{{ item.jumlah_kambing }}</td>
+                <td>{{ item.tanggal }}</td>
+                <td>{{ item.masakan }}</td>
+                <td class="col-box">{{ item.jumlah_box }}</td>
+                <td>{{ item.customer_name }}</td>
+                <td>{{ item.leftover_food }}</td>
+                <td class="col-berangkat">{{ item.departure_time }}</td>
+                <td class="col-tiba">{{ item.arrival_time }}</td>
+                <td>{{ item.cabang }}</td>
+                <td>{{ item.alamat }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="13" style="text-align: center; color: #999;">Tidak ada data jadwal untuk periode ini.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Dicetak oleh: Sahabat Aqiqah - {{ print_date }}
+    </div>
+</body>
+</html>

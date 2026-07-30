@@ -639,19 +639,21 @@ Filter
 
 Kolom
 
-| Kolom              |
-| ------------------ |
-| Tanggal Pengiriman |
-| Jam Pengiriman     |
-| Jam Acara          |
-| Nomor Invoice      |
-| Customer           |
-| Paket              |
-| **Jenis Kambing**  |
-| Jumlah Box         |
-| Area               |
-| Driver             |
-| Status             |
+| Kolom                  |
+| ---------------------- |
+| No.                    |
+| Driver                 |
+| **Jenis Kambing (×Qty)** |
+| **Jumlah Kambing (×Qty)** |
+| Hari & Tanggal Kirim   |
+| Masakan & Menu Olahan  |
+| **Jumlah Box**          |
+| Nama Pemesan           |
+| Sisa Masakan           |
+| Jam Berangkat          |
+| Jam Tiba               |
+| Cabang                 |
+| Alamat                 |
 
 ---
 
@@ -991,7 +993,12 @@ Versi berikutnya akan mendukung:
 - Jenis Kambing tampil pada Jadwal Pesanan.
 - Jenis Kambing digunakan sebagai dasar rekap produksi.
 - Dapat diekspor ke Excel.
-- Dapat dicetak sebagai Jadwal Harian.
+- Dapat dicetak sebagai Jadwal Harian (PDF).
+- **Jumlah Kambing** = `Package.quantity × OrderPackage.quantity`
+- **Jumlah Box** = `(OrderPackage.box_qty × OrderPackage.quantity) + SUM(OrderPackageAddon.quantity WHERE equipment.tipe='Box Paket')`
+- **Form box_qty**: Input box_qty dari form tersimpan ke database. Jika `Package.box = 0`, box_qty = 0.
+- **Export Excel**: Kolom No., Driver, Jenis Kambing (×Qty), Jumlah Kambing (×Qty), Hari & Tanggal Kirim, Masakan & Menu Olahan, Jumlah Box, Nama Pemesan, Sisa Masakan, Jam Berangkat, Jam Tiba, Cabang, Alamat.
+- **Cetak PDF**: Format Landscape A4, kolom sama seperti Export Excel.
 
 ---
 
@@ -1385,10 +1392,12 @@ Auto-tracking via `crum.get_current_user()` di method `save()`.
 
 ### 6.8 Jadwal Pesanan
 
-| Route                | View            | Deskripsi                           |
-| -------------------- | --------------- | ----------------------------------- |
-| `/jadwal/`           | `jadwal_index`  | Halaman kalender jadwal pesanan     |
-| `/jadwal/events/`    | `jadwal_events` | API JSON untuk data event kalender  |
+| Route                      | View                   | Deskripsi                           |
+| -------------------------- | ---------------------- | ----------------------------------- |
+| `/jadwal/`                 | `jadwal_index`         | Halaman kalender jadwal pesanan     |
+| `/jadwal/events/`          | `jadwal_events`        | API JSON untuk data event kalender  |
+| `/jadwal/export/excel/`    | `jadwal_export_excel`  | Export jadwal ke Excel (.xlsx)      |
+| `/jadwal/print/daily/`     | `jadwal_print_daily`   | Cetak jadwal harian (PDF)           |
 
 ---
 
@@ -1575,6 +1584,7 @@ Aplikasi **fully functional** dengan fitur:
 - Generate dokumen PDF (Invoice, BAP, Checklist)
 - Sistem notifikasi draft pesanan
 - Export data ke Excel
+- **Cetak Jadwal Harian (PDF)**
 - **Mobile-responsive sidebar** (slide in/out, overlay backdrop)
 - **Mobile reminder dropdown** (centered modal, scroll lock)
 - Auto-logout 15 menit
@@ -1582,6 +1592,6 @@ Aplikasi **fully functional** dengan fitur:
 
 ---
 
-_Document updated: 19 Juli 2026_
-_Version: 2.1_
+_Document updated: 30 Juli 2026_
+_Version: 2.2_
 _Based on codebase analysis of AqiqahOn application_

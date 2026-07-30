@@ -244,6 +244,17 @@
     body.dark-page #modal-detail .modal-header {
         border-bottom-color: rgba(255, 255, 255, 0.08);
     }
+    .jadwal-action-btn {
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+        margin-bottom: 0;
+    }
 </style>
 {% endblock stylesheets %}
 
@@ -263,7 +274,8 @@
                     <div class="{% if request|is_mobile %}col-12 mb-3{% else %}col-4{% endif %} d-flex align-items-center">
                         <h4 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Jadwal Pesanan</h4>
                     </div>
-                    <div class="{% if request|is_mobile %}col-12 mb-2{% else %}col-2{% endif %}">
+                    <div class="col d-none d-md-block"></div>
+                    <div class="{% if request|is_mobile %}col-6 mb-2{% else %}col-2{% endif %}">
                         <div class="branch-dropdown" id="branchDropdownWrapper">
                             <div class="branch-display" id="branchDropdown">
                                 <span id="branchText">Semua Cabang</span>
@@ -297,11 +309,19 @@
                             <option value="CANCELLED">Dibatalkan</option>
                         </select>
                     </div>
-                    <div class="{% if request|is_mobile %}col-6 mb-2{% else %}col-3{% endif %}">
+                    <div class="{% if request|is_mobile %}col mb-2{% else %}col-2{% endif %}">
                         <div class="input-group input-group-outline">
                             <input type="text" id="filter-driver" class="form-control form-control-sm" placeholder="Cari Driver..." autocomplete="off" oninput="window._doFilterDriver()">
                             <span class="input-group-text bg-transparent end-0 pe-3 py-2 cursor-pointer text-body z-index-0" onclick="window._doFilterDriver()"><i class="fas fa-search"></i></span>
                         </div>
+                    </div>
+                    <div class="{% if request|is_mobile %}col-auto mb-2{% else %}col-auto{% endif %} d-flex align-items-center justify-content-end gap-1 ms-2">
+                        <a id="btn-export-excel" href="javascript:void(0)" class="btn btn-sm bg-gradient-success text-white jadwal-action-btn" title="Ekspor Excel" onclick="window._exportExcel()">
+                            <i class="fas fa-file-excel"></i>
+                        </a>
+                        <a id="btn-print-daily" href="javascript:void(0)" class="btn btn-sm bg-gradient-dark text-white jadwal-action-btn" title="Cetak Jadwal Harian" onclick="window._printDaily()">
+                            <i class="fas fa-print"></i>
+                        </a>
                     </div>
                 </div>
 
@@ -861,6 +881,67 @@ document.addEventListener('DOMContentLoaded', function() {
         driverTimeout = setTimeout(function() {
             loadCalendarEvents();
         }, 500);
+    };
+
+    function buildFilterParams() {
+        var view = calendar.view;
+        if (!view) return '';
+        var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+        var startStr, endStr;
+
+        if (view.type === 'dayGridMonth') {
+            var as = new Date(view.activeStart);
+            var ae = new Date(view.activeEnd);
+            var midTime = (as.getTime() + ae.getTime()) / 2;
+            var mid = new Date(midTime);
+            var year = mid.getFullYear();
+            var month = mid.getMonth();
+            var lastDay = new Date(year, month + 1, 0).getDate();
+            startStr = year + '-' + pad(month + 1) + '-01';
+            endStr = year + '-' + pad(month + 1) + '-' + pad(lastDay);
+        } else if (view.type === 'timeGridWeek') {
+            var s = new Date(view.activeStart);
+            var e = new Date(s);
+            e.setDate(e.getDate() + 6);
+            startStr = s.getFullYear() + '-' + pad(s.getMonth() + 1) + '-' + pad(s.getDate());
+            endStr = e.getFullYear() + '-' + pad(e.getMonth() + 1) + '-' + pad(e.getDate());
+        } else {
+            var s = view.activeStart;
+            startStr = s.getFullYear() + '-' + pad(s.getMonth() + 1) + '-' + pad(s.getDate());
+            endStr = startStr;
+        }
+
+        var params = new URLSearchParams();
+        params.append('start', startStr);
+        params.append('end', endStr);
+        var allCheck = document.getElementById('branchAll');
+        var branchChecks = document.querySelectorAll('.branch-checkbox:not(#branchAll)');
+        var anyChecked = false;
+        for (var i = 0; i < branchChecks.length; i++) {
+            if (branchChecks[i].checked) { anyChecked = true; break; }
+        }
+        if (allCheck.checked || !anyChecked) {
+            params.append('branch', 'all');
+        } else {
+            for (var i = 0; i < branchChecks.length; i++) {
+                if (branchChecks[i].checked) {
+                    params.append('branch', branchChecks[i].value);
+                }
+            }
+        }
+        params.append('status', document.getElementById('filter-status').value);
+        params.append('driver', document.getElementById('filter-driver').value);
+        return params.toString();
+    }
+
+    window._exportExcel = function() {
+        var qs = buildFilterParams();
+        window.location.href = "{% url 'jadwal-export-excel' %}?" + qs;
+    };
+
+    window._printDaily = function() {
+        var qs = buildFilterParams();
+        window.open("{% url 'jadwal-print-daily' %}?" + qs, '_blank');
     };
 });
 </script>

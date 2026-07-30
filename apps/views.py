@@ -1,6 +1,7 @@
 import datetime as dt
 from datetime import date, timedelta
 import glob
+import io
 import json
 import os
 from django.contrib.auth import update_session_auth_hash
@@ -105,7 +106,7 @@ def dashboard(request):
         calculated_kambing=F('package__quantity') * F('quantity')
     ).aggregate(total=Sum('calculated_kambing'))['total'] or 0
     total_box = order_packages.annotate(
-        calculated_box=F('package__box') * F('quantity')
+        calculated_box=F('box_qty') * F('quantity')
     ).aggregate(total=Sum('calculated_box'))['total'] or 0
 
     order_addons = OrderPackageAddon.objects.filter(
@@ -133,9 +134,27 @@ def dashboard(request):
         total=Sum('quantity')
     ).filter(total__gt=0)
 
-    addon_box_paket_qty = order_addons.filter(
+    box_paket_by_order_pkg = order_addons.filter(
         equipment__tipe='Box Paket'
-    ).aggregate(total=Sum('quantity'))['total'] or 0
+    ).values('order_id', 'package_id').annotate(box_qty=Sum('quantity'))
+
+    box_paket_lookup = {}
+    for item in box_paket_by_order_pkg:
+        try:
+            op = OrderPackage.objects.select_related('package').get(
+                order_id=item['order_id'], package_id=item['package_id']
+            )
+        except OrderPackage.DoesNotExist:
+            continue
+        qty = item['box_qty']
+        for field in ['main_cuisine', 'sub_cuisine', 'side_cuisine1', 'side_cuisine2',
+                      'side_cuisine3', 'side_cuisine4', 'side_cuisine5', 'rice',
+                      'box_type', 'bag']:
+            val = getattr(op, field, None)
+            if val:
+                box_paket_lookup[val] = box_paket_lookup.get(val, 0) + qty
+
+    addon_box_paket_qty = sum(item['box_qty'] for item in box_paket_by_order_pkg)
 
     total_box_paket = total_box + addon_box_paket_qty
 
@@ -176,19 +195,26 @@ def dashboard(request):
                 'count': item['total'] or 0,
             })
 
+    for item in recap_box_items:
+        item['count'] += box_paket_lookup.get(item['name'], 0)
+
     recap_masakan = order_packages.exclude(main_cuisine__isnull=True).exclude(main_cuisine='').values(
         'main_cuisine'
     ).annotate(total=Sum(F('package__box') * F('quantity'))).filter(total__gt=0).order_by('main_cuisine')
 
+    recap_masakan = list(recap_masakan)
+    for item in recap_masakan:
+        item['total'] += box_paket_lookup.get(item['main_cuisine'], 0)
+
     menu_olahan_counter = {}
     for op in order_packages:
-        for field_name in ['sub_cuisine', 'side_cuisine1', 'side_cuisine2', 'side_cuisine3', 'side_cuisine4', 'side_cuisine5']:
+        for field_name in ['sub_cuisine', 'side_cuisine1', 'side_cuisine2', 'side_cuisine3', 'side_cuisine4', 'side_cuisine5', 'beverage']:
             val = getattr(op, field_name, None)
             if val:
                 menu_olahan_counter[val] = menu_olahan_counter.get(val, 0) + (op.package.box * op.quantity)
         if op.rice:
             menu_olahan_counter[op.rice] = menu_olahan_counter.get(op.rice, 0) + (op.package.box * op.quantity)
-    recap_menu_olahan = [{'name': k, 'count': v} for k, v in sorted(menu_olahan_counter.items()) if v > 0]
+    recap_menu_olahan = [{'name': k, 'count': v + box_paket_lookup.get(k, 0)} for k, v in sorted(menu_olahan_counter.items()) if v > 0 or box_paket_lookup.get(k, 0) > 0]
 
     dekorasi_per_order = order_packages.filter(
         package__dashboard__dashboard_name='Dekorasi'
@@ -361,9 +387,6 @@ def dashboard(request):
         'total_kambing': total_kambing,
         'total_box': total_box,
         'total_box_paket': total_box_paket,
-        'addon_kemasan': addon_kemasan,
-        'addon_masakan': addon_masakan,
-        'addon_olahan': addon_olahan,
         'dashboard_recap': dashboard_recap,
         'recap_box_items': recap_box_items,
         'recap_masakan': recap_masakan,
@@ -4895,6 +4918,7 @@ def order_package_add(request, _id, _cat, _pack, _type, _add):
             package.package_id = _pack
             package.type = _type
             package.quantity = request.POST.get('quantity')
+            package.box_qty = int(request.POST.get('box')) if request.POST.get('box') else 0
             package.box_type = request.POST.get('box_type')
             package.main_cuisine = request.POST.get('main_cuisine')
             package.main_cuisine_price = extra_price_main
@@ -5250,6 +5274,7 @@ def order_package_update(request, _id, _package, _cat, _pack, _type, _add):
             package.package_id = _pack
             package.type = _type
             package.quantity = request.POST.get('quantity')
+            package.box_qty = int(request.POST.get('box')) if request.POST.get('box') else 0
             package.box_type = request.POST.get('box_type')
             package.main_cuisine = request.POST.get('main_cuisine')
             package.main_cuisine_price = extra_price_main
@@ -5474,6 +5499,7 @@ def order_package_cs_update(request, _id, _cat, _pack, _type):
         package.package_id = _pack
         package.type = _type
         package.quantity = int(request.POST.get('quantity'))
+        package.box_qty = int(request.POST.get('box')) if request.POST.get('box') else 0
         package.box_type = request.POST.get('box_type')
         package.main_cuisine = request.POST.get('main_cuisine')
         package.main_cuisine_price = extra_price_main
@@ -7871,7 +7897,7 @@ def jadwal_events(request):
                 category_clean = re.sub(r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
                 product_name = f"{category_clean} - {pkg.package.package_name}".strip(' -')
                 product_list.append(product_name)
-                quantity_total += pkg.quantity or 1
+                quantity_total += (pkg.package.quantity or 0) * (pkg.quantity or 1)
                 if pkg.type and pkg.type not in goat_types:
                     goat_types.append(pkg.type)
                 if pkg.package.goat_type and pkg.package.goat_type.goat_type_name not in goat_type_names:
@@ -8032,6 +8058,326 @@ def jadwal_reminders(request):
                 })
 
     return JsonResponse({'reminders': reminders, 'count': len(reminders)})
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='JADWAL')
+def jadwal_export_excel(request):
+    start = request.GET.get('start', '').split('T')[0]
+    end = request.GET.get('end', '').split('T')[0]
+    filter_branch_list = request.GET.getlist('branch', [])
+    filter_branch_list = [b for b in filter_branch_list if b and b != 'all']
+    status = request.GET.get('status', 'all')
+    driver_filter = request.GET.get('driver', '').strip()
+
+    areas = AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True)
+    orders = Order.objects.filter(
+        delivery_date__date__gte=start,
+        delivery_date__date__lte=end,
+        regional_id__in=areas
+    ).exclude(order_status__in=['PENDING', 'DRAFT', 'BATAL'])
+
+    if filter_branch_list:
+        orders = orders.filter(regional_id__in=filter_branch_list)
+    if status != 'all':
+        orders = orders.filter(schedule_status=status)
+    if driver_filter:
+        orders = orders.filter(driver__icontains=driver_filter)
+    orders = orders.order_by('delivery_date', 'departure_time')
+
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet('Jadwal Pesanan')
+
+    title_format = workbook.add_format({
+        'bold': True, 'font_size': 12, 'align': 'center', 'valign': 'vcenter'
+    })
+    header_format = workbook.add_format({
+        'bold': True, 'bg_color': '#FF8C42', 'font_color': '#FFFFFF',
+        'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True, 'font_size': 12
+    })
+    cell_format = workbook.add_format({
+        'border': 1, 'valign': 'vcenter', 'text_wrap': True, 'font_size': 12
+    })
+    center_format = workbook.add_format({
+        'border': 1, 'valign': 'vcenter', 'align': 'center', 'font_size': 12
+    })
+
+    columns = [
+        ('No.', 5),
+        ('Driver', 18),
+        ('Jenis Kambing', 20),
+        ('Jumlah Kambing', 15),
+        ('Hari & Tanggal Kirim', 22),
+        ('Masakan & Menu Olahan', 35),
+        ('Jumlah Box', 12),
+        ('Nama Pemesan', 25),
+        ('Sisa Masakan', 20),
+        ('Jam Berangkat', 14),
+        ('Jam Tiba', 12),
+        ('Cabang', 20),
+        ('Alamat', 30),
+    ]
+
+    hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Ahad']
+    bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+             'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+
+    worksheet.merge_range(0, 0, 0, len(columns) - 1, 'JADWAL PESANAN', title_format)
+    date_label = f'{start} s/d {end}' if start and end else 'Semua'
+    worksheet.merge_range(1, 0, 1, len(columns) - 1, f'Periode: {date_label}', workbook.add_format({'align': 'center', 'font_size': 12}))
+
+    for col_idx, (col_name, col_width) in enumerate(columns):
+        worksheet.write(3, col_idx, col_name, header_format)
+        worksheet.set_column(col_idx, col_idx, col_width)
+
+    row = 4
+    for no, order in enumerate(orders.select_related('regional'), 1):
+        if not order.regional:
+            continue
+
+        packages = OrderPackage.objects.filter(order=order).select_related('category', 'package', 'package__goat_type')
+        product_parts = []
+        description_parts = []
+        quantity_total = 0
+        goat_types = []
+        goat_type_names = []
+        total_box = 0
+        for pkg in packages:
+            category_clean = re.sub(r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
+            product_name = f"{category_clean} - {pkg.package.package_name}".strip(' -')
+            product_parts.append(product_name)
+            quantity_total += (pkg.package.quantity or 0) * (pkg.quantity or 1)
+            if pkg.type and pkg.type not in goat_types:
+                goat_types.append(pkg.type)
+            if pkg.package.goat_type and pkg.package.goat_type.goat_type_name not in goat_type_names:
+                goat_type_names.append(pkg.package.goat_type.goat_type_name)
+            total_box += (pkg.box_qty or 0) * (pkg.quantity or 1)
+
+            desc_items = []
+            for cuisine in [pkg.main_cuisine, pkg.sub_cuisine, pkg.side_cuisine1, pkg.side_cuisine2, pkg.side_cuisine3, pkg.side_cuisine4, pkg.side_cuisine5]:
+                if cuisine:
+                    desc_items.append(cuisine)
+            if pkg.box_type:
+                desc_items.append(f"Box ({pkg.box_type})")
+            if pkg.upgrade:
+                desc_items.append(f"Up: {pkg.upgrade}")
+            if pkg.beverage:
+                desc_items.append(f"Minuman: {pkg.beverage}")
+            if pkg.souvenir:
+                desc_items.append(f"Souvenir: {pkg.souvenir}")
+            if desc_items:
+                description_parts.append(', '.join(desc_items))
+
+        if quantity_total == 0:
+            goat_type_str = '-'
+            jumlah_kambing = 0
+        else:
+            goat_type_str = ' - '.join(f"{t} - {n}" for t, n in zip(goat_types, goat_type_names)) if goat_types and goat_type_names else (', '.join(goat_types) if goat_types else '-')
+            jumlah_kambing = quantity_total
+
+        delivery = order.delivery_date
+        if delivery:
+            day_name = hari[delivery.weekday()]
+            tanggal = f"{day_name}, {delivery.day} {bulan[delivery.month - 1]} {delivery.year}"
+        else:
+            tanggal = '-'
+
+        box_addon_total = OrderPackageAddon.objects.filter(
+            order=order,
+            equipment__tipe='Box Paket'
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+        total_box += box_addon_total
+
+        leftover = OrderLeftoverFood.objects.filter(order=order).values_list('leftover_food', flat=True).first() or '-'
+
+        dt_val = str(order.departure_time or '00:00')
+        ta_val = ''
+        if order.time_arrival:
+            try:
+                parts = order.time_arrival.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                h = (h - 1 + 24) % 24
+                ta_val = f"{h:02d}:{m:02d}"
+            except (ValueError, IndexError):
+                ta_val = '-'
+        else:
+            ta_val = '-'
+
+        worksheet.write_number(row, 0, no, center_format)
+        worksheet.write_string(row, 1, order.driver or '-', cell_format)
+        worksheet.write_string(row, 2, goat_type_str, cell_format)
+        worksheet.write_number(row, 3, jumlah_kambing, center_format)
+        worksheet.write_string(row, 4, tanggal, cell_format)
+        worksheet.write_string(row, 5, ' | '.join(description_parts) if description_parts else '-', cell_format)
+        worksheet.write_number(row, 6, total_box, center_format)
+        worksheet.write_string(row, 7, order.customer_name or '-', cell_format)
+        worksheet.write_string(row, 8, leftover, cell_format)
+        worksheet.write_string(row, 9, dt_val, center_format)
+        worksheet.write_string(row, 10, ta_val, center_format)
+        worksheet.write_string(row, 11, order.regional.area_name or '-', cell_format)
+        worksheet.write_string(row, 12, order.customer_address or '-', cell_format)
+        row += 1
+
+    workbook.close()
+    output.seek(0)
+
+    today_str = date.today().strftime('%Y-%m-%d')
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="Jadwal_Pesanan_{today_str}.xlsx"'
+    return response
+
+
+@login_required(login_url='/login/')
+@role_required(allowed_roles='JADWAL')
+def jadwal_print_daily(request):
+    start = request.GET.get('start', '').split('T')[0]
+    end = request.GET.get('end', '').split('T')[0]
+    filter_branch_list = request.GET.getlist('branch', [])
+    filter_branch_list = [b for b in filter_branch_list if b and b != 'all']
+    status = request.GET.get('status', 'all')
+    driver_filter = request.GET.get('driver', '').strip()
+
+    areas = AreaUser.objects.filter(user_id=request.user.user_id).values_list('area_id', flat=True)
+    orders = Order.objects.filter(
+        delivery_date__date__gte=start,
+        delivery_date__date__lte=end,
+        regional_id__in=areas
+    ).exclude(order_status__in=['PENDING', 'DRAFT', 'BATAL'])
+
+    if filter_branch_list:
+        orders = orders.filter(regional_id__in=filter_branch_list)
+    if status != 'all':
+        orders = orders.filter(schedule_status=status)
+    if driver_filter:
+        orders = orders.filter(driver__icontains=driver_filter)
+    orders = orders.order_by('delivery_date', 'departure_time')
+
+    hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Ahad']
+    bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+             'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+
+    schedule_data = []
+    for no, order in enumerate(orders.select_related('regional'), 1):
+        if not order.regional:
+            continue
+
+        packages = OrderPackage.objects.filter(order=order).select_related('category', 'package', 'package__goat_type')
+        product_parts = []
+        description_parts = []
+        quantity_total = 0
+        goat_types = []
+        goat_type_names = []
+        total_box = 0
+        for pkg in packages:
+            category_clean = re.sub(r'\s*\([^)]*\)', '', pkg.category.category_name) if pkg.category else ''
+            product_name = f"{category_clean} - {pkg.package.package_name}".strip(' -')
+            product_parts.append(product_name)
+            quantity_total += (pkg.package.quantity or 0) * (pkg.quantity or 1)
+            if pkg.type and pkg.type not in goat_types:
+                goat_types.append(pkg.type)
+            if pkg.package.goat_type and pkg.package.goat_type.goat_type_name not in goat_type_names:
+                goat_type_names.append(pkg.package.goat_type.goat_type_name)
+            total_box += (pkg.box_qty or 0) * (pkg.quantity or 1)
+
+            desc_items = []
+            for cuisine in [pkg.main_cuisine, pkg.sub_cuisine, pkg.side_cuisine1, pkg.side_cuisine2, pkg.side_cuisine3, pkg.side_cuisine4, pkg.side_cuisine5]:
+                if cuisine:
+                    desc_items.append(cuisine)
+            if pkg.box_type:
+                desc_items.append(f"Box ({pkg.box_type})")
+            if pkg.upgrade:
+                desc_items.append(f"Up: {pkg.upgrade}")
+            if pkg.beverage:
+                desc_items.append(f"Minuman: {pkg.beverage}")
+            if pkg.souvenir:
+                desc_items.append(f"Souvenir: {pkg.souvenir}")
+            if desc_items:
+                description_parts.append(', '.join(desc_items))
+
+        if quantity_total == 0:
+            goat_type_str = '-'
+            jumlah_kambing = 0
+        else:
+            goat_type_str = ' - '.join(f"{t} - {n}" for t, n in zip(goat_types, goat_type_names)) if goat_types and goat_type_names else (', '.join(goat_types) if goat_types else '-')
+            jumlah_kambing = quantity_total
+
+        delivery = order.delivery_date
+        if delivery:
+            day_name = hari[delivery.weekday()]
+            tanggal = f"{day_name}, {delivery.day} {bulan[delivery.month - 1]} {delivery.year}"
+        else:
+            tanggal = '-'
+
+        box_addon_total = OrderPackageAddon.objects.filter(
+            order=order,
+            equipment__tipe='Box Paket'
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+        total_box += box_addon_total
+
+        leftover = OrderLeftoverFood.objects.filter(order=order).values_list('leftover_food', flat=True).first() or '-'
+
+        dt_val = str(order.departure_time or '00:00')
+        ta_val = ''
+        if order.time_arrival:
+            try:
+                parts = order.time_arrival.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                h = (h - 1 + 24) % 24
+                ta_val = f"{h:02d}:{m:02d}"
+            except (ValueError, IndexError):
+                ta_val = '-'
+        else:
+            ta_val = '-'
+
+        schedule_status_labels = {
+            'UNSCHEDULED': 'Belum Dijadwalkan', 'SCHEDULED': 'Sudah Dijadwalkan',
+            'COOKING': 'Sedang Produksi', 'PACKING': 'Sedang Packing',
+            'READY': 'Siap Kirim', 'ON_DELIVERY': 'Dalam Pengiriman',
+            'COMPLETED': 'Selesai', 'CANCELLED': 'Dibatalkan'
+        }
+
+        schedule_data.append({
+            'no': no,
+            'driver': order.driver or '-',
+            'goat_type': goat_type_str,
+            'jumlah_kambing': jumlah_kambing,
+            'tanggal': tanggal,
+            'masakan': ' | '.join(description_parts) if description_parts else '-',
+            'jumlah_box': total_box,
+            'customer_name': order.customer_name or '-',
+            'leftover_food': leftover,
+            'departure_time': dt_val,
+            'arrival_time': ta_val,
+            'cabang': order.regional.area_name or '-',
+            'alamat': order.customer_address or '-',
+            'schedule_status': schedule_status_labels.get(order.schedule_status or 'UNSCHEDULED', '-'),
+        })
+
+    periode = f'{start} s/d {end}' if start and end else 'Semua'
+
+    template = get_template('home/jadwal_print_daily.html')
+    html = template.render({
+        'schedule_data': schedule_data,
+        'periode': periode,
+        'print_date': timezone.now().strftime('%d %m %Y %H:%M'),
+    })
+
+    result = io.BytesIO()
+    pdf = pisa.pisaDocument(io.BytesIO(html.encode('utf-8')), result, encoding='utf-8')
+    if pdf.err:
+        return HttpResponse('Error generating PDF', status=500)
+
+    result.seek(0)
+    today_str = date.today().strftime('%Y-%m-%d')
+    response = FileResponse(result, content_type='application/pdf')
+    response['Content-Disposition'] = f'filename="Jadwal_Harian_{today_str}.pdf"'
+    return response
 
 
 @login_required(login_url='/login/')

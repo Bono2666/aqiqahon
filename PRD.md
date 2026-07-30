@@ -368,14 +368,14 @@ Checklist Form untuk driver & checker:
 
 #### 3.6.4 Clean Up PDF (`/cleanup/`)
 
-Fitur untuk membersihkan file PDF sementara yang dihasilkan dari generate Invoice, BAP, dan Checklist.
+Fitur untuk membersihkan file PDF sementara yang dihasilkan dari generate Invoice, BAP, Checklist, dan Jadwal Harian.
 
 | Item | Detail |
 |------|--------|
 | Tombol | Ikon broom di top navigation bar |
 | Badge | Badge jumlah file PDF (merah, `bg-gradient-danger`) |
 | Akses | Role `CLEANUP` atau superuser |
-| Pola file | `INVOICE_*.pdf`, `SURAT_JALAN_*.pdf`, `CHECKLIST_*.pdf` |
+| Pola file | `INVOICE_*.pdf`, `SURAT_JALAN_*.pdf`, `CHECKLIST_*.pdf`, `Jadwal_Harian_*.pdf` |
 | Lokasi file | Root directory project (`settings.BASE_DIR`) |
 
 **Fitur:**
@@ -993,12 +993,12 @@ Versi berikutnya akan mendukung:
 - Jenis Kambing tampil pada Jadwal Pesanan.
 - Jenis Kambing digunakan sebagai dasar rekap produksi.
 - Dapat diekspor ke Excel.
-- Dapat dicetak sebagai Jadwal Harian (PDF).
+- Dapat dicetak sebagai Jadwal Harian (PDF, ReportLab canvas).
 - **Jumlah Kambing** = `Package.quantity × OrderPackage.quantity`
 - **Jumlah Box** = `(OrderPackage.box_qty × OrderPackage.quantity) + SUM(OrderPackageAddon.quantity WHERE equipment.tipe='Box Paket')`
 - **Form box_qty**: Input box_qty dari form tersimpan ke database. Jika `Package.box = 0`, box_qty = 0.
 - **Export Excel**: Kolom No., Driver, Jenis Kambing (×Qty), Jumlah Kambing (×Qty), Hari & Tanggal Kirim, Masakan & Menu Olahan, Jumlah Box, Nama Pemesan, Sisa Masakan, Jam Berangkat, Jam Tiba, Cabang, Alamat.
-- **Cetak PDF**: Format Landscape A4, kolom sama seperti Export Excel.
+- **Cetak PDF**: Format Landscape A4, ReportLab canvas, kolom sama seperti Export Excel. Nama file: `Jadwal_Harian_{start}_{end}.pdf`.
 
 ---
 
@@ -1593,5 +1593,5 @@ Aplikasi **fully functional** dengan fitur:
 ---
 
 _Document updated: 30 Juli 2026_
-_Version: 2.2_
+_Version: 2.3_
 _Based on codebase analysis of AqiqahOn application_

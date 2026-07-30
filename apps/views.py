@@ -31,10 +31,11 @@ from django.template.loader import get_template
 from django.utils.text import Truncator
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.utils import simpleSplit
+from reportlab.lib.colors import HexColor
 from reportlab.pdfgen import canvas
 from crum import get_current_user
 from apps.notifications import order_notification
@@ -8360,23 +8361,154 @@ def jadwal_print_daily(request):
         })
 
     periode = f'{start} s/d {end}' if start and end else 'Semua'
+    print_date = timezone.now().strftime('%d %m %Y %H:%M')
 
-    template = get_template('home/jadwal_print_daily.html')
-    html = template.render({
-        'schedule_data': schedule_data,
-        'periode': periode,
-        'print_date': timezone.now().strftime('%d %m %Y %H:%M'),
-    })
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    normal_style.fontSize = 7
 
-    result = io.BytesIO()
-    pdf = pisa.pisaDocument(io.BytesIO(html.encode('utf-8')), result, encoding='utf-8')
-    if pdf.err:
-        return HttpResponse('Error generating PDF', status=500)
-
-    result.seek(0)
     today_str = date.today().strftime('%Y-%m-%d')
+    if start and end:
+        filename = f'Jadwal_Harian_{start}_{end}.pdf'
+    else:
+        filename = f'Jadwal_Harian_{today_str}.pdf'
+    pdf_file = canvas.Canvas(filename, pagesize=landscape(A4))
+
+    page_w, page_h = landscape(A4)
+    margin_x = 20
+    margin_top = 20
+
+    y = page_h - margin_top
+
+    title = "JADWAL PESANAN HARIAN"
+    pdf_file.setFont("Helvetica-Bold", 13)
+    title_w = pdf_file.stringWidth(title, "Helvetica-Bold", 13)
+    pdf_file.drawString((page_w - title_w) / 2, y - 8, title)
+
+    pdf_file.setFont("Helvetica", 8)
+    info_text = f"Periode: {periode}  |  Dicetak: {print_date}  |  Total: {len(schedule_data)} pesanan"
+    info_w = pdf_file.stringWidth(info_text, "Helvetica", 8)
+    pdf_file.drawString((page_w - info_w) / 2, y - 20, info_text)
+
+    pdf_file.setStrokeColor(HexColor('#FF8C42'))
+    pdf_file.setLineWidth(2)
+    pdf_file.line(margin_x, y - 28, page_w - margin_x, y - 28)
+
+    y = y - 40
+
+    col_headers = ['No.', 'Driver', 'Jenis Kambing', 'Jumlah\nKambing', 'Hari & Tanggal\nKirim', 'Masakan &\nMenu Olahan', 'Jumlah\nBox', 'Nama\nPemesan', 'Sisa\nMasakan', 'Jam\nBerangkat', 'Jam\nTiba', 'Cabang', 'Alamat']
+    col_widths = [22, 57, 70, 37, 83, 122, 33, 78, 65, 44, 37, 65, 88]
+    row_height_header = 28
+
+    pdf_file.setFillColor(HexColor('#FF8C42'))
+    pdf_file.rect(margin_x, y - row_height_header, page_w - 2 * margin_x, row_height_header, fill=1, stroke=0)
+    pdf_file.setFillColor(HexColor('#FFFFFF'))
+    pdf_file.setFont("Helvetica-Bold", 6.5)
+
+    x = margin_x
+    for i, (header, w) in enumerate(zip(col_headers, col_headers and col_widths)):
+        lines = header.split('\n')
+        for li, line in enumerate(lines):
+            tw = pdf_file.stringWidth(line, "Helvetica-Bold", 6.5)
+            pdf_file.drawString(x + (w - tw) / 2, y - 10 - li * 8, line)
+        x += col_widths[i]
+
+    pdf_file.setFillColor(HexColor('#000000'))
+    y -= row_height_header
+
+    row_height = 18
+    font_size = 6.5
+
+    def draw_row(data_row, y_pos):
+        x = margin_x
+        values = [
+            str(data_row['no']),
+            data_row['driver'],
+            data_row['goat_type'],
+            str(data_row['jumlah_kambing']),
+            data_row['tanggal'],
+            data_row['masakan'],
+            str(data_row['jumlah_box']),
+            data_row['customer_name'],
+            data_row['leftover_food'],
+            data_row['departure_time'],
+            data_row['arrival_time'],
+            data_row['cabang'],
+            data_row['alamat'],
+        ]
+        aligns = ['center', 'left', 'left', 'center', 'left', 'left', 'center', 'left', 'left', 'center', 'center', 'left', 'left']
+
+        max_lines = 1
+        for i, (val, w) in enumerate(zip(values, col_widths)):
+            lines = simpleSplit(val, 'Helvetica', font_size, w - 4)
+            if len(lines) > max_lines:
+                max_lines = len(lines)
+
+        actual_row_h = max(row_height, 6 + max_lines * 9)
+
+        if int(data_row['no']) % 2 == 0:
+            pdf_file.setFillColor(HexColor('#F9F9F9'))
+            pdf_file.rect(margin_x, y_pos - actual_row_h, page_w - 2 * margin_x, actual_row_h, fill=1, stroke=0)
+            pdf_file.setFillColor(HexColor('#000000'))
+
+        pdf_file.setStrokeColor(HexColor('#DDDDDD'))
+        pdf_file.setLineWidth(0.5)
+        pdf_file.rect(margin_x, y_pos - actual_row_h, page_w - 2 * margin_x, actual_row_h, fill=0, stroke=1)
+
+        pdf_file.setFont("Helvetica", font_size)
+        x = margin_x
+        for i, (val, w) in enumerate(zip(values, col_widths)):
+            lines = simpleSplit(val, 'Helvetica', font_size, w - 4)
+            for li, line in enumerate(lines):
+                if aligns[i] == 'center':
+                    tw = pdf_file.stringWidth(line, 'Helvetica', font_size)
+                    pdf_file.drawString(x + (w - tw) / 2, y_pos - 10 - li * 9, line)
+                elif aligns[i] == 'right':
+                    tw = pdf_file.stringWidth(line, 'Helvetica', font_size)
+                    pdf_file.drawString(x + w - tw - 2, y_pos - 10 - li * 9, line)
+                else:
+                    pdf_file.drawString(x + 2, y_pos - 10 - li * 9, line)
+            x += col_widths[i]
+
+        return y_pos - actual_row_h
+
+    for data_row in schedule_data:
+        needed = max(row_height, 24)
+        if y - needed < 50:
+            pdf_file.setFont("Helvetica-Oblique", 7)
+            pdf_file.drawString(margin_x, 30, f"Dicetak oleh: Sahabat Aqiqah - {print_date}")
+            pdf_file.showPage()
+            pdf_file = canvas.Canvas(filename)
+            pdf_file.setFont("Helvetica-Bold", 10)
+            pdf_file.drawString(margin_x, page_h - 30, "JADWAL PESANAN HARIAN (lanjutan)")
+            pdf_file.setFont("Helvetica", 8)
+            pdf_file.drawString(margin_x, page_h - 42, f"Periode: {periode}")
+            y = page_h - 55
+
+            pdf_file.setFillColor(HexColor('#FF8C42'))
+            pdf_file.rect(margin_x, y - row_height_header, page_w - 2 * margin_x, row_height_header, fill=1, stroke=0)
+            pdf_file.setFillColor(HexColor('#FFFFFF'))
+            pdf_file.setFont("Helvetica-Bold", 6.5)
+            x = margin_x
+            for i, (header, w) in enumerate(zip(col_headers, col_widths)):
+                lines = header.split('\n')
+                for li, line in enumerate(lines):
+                    tw = pdf_file.stringWidth(line, "Helvetica-Bold", 6.5)
+                    pdf_file.drawString(x + (w - tw) / 2, y - 10 - li * 8, line)
+                x += col_widths[i]
+            pdf_file.setFillColor(HexColor('#000000'))
+            y -= row_height_header
+
+        y = draw_row(data_row, y)
+
+    pdf_file.setFont("Helvetica-Oblique", 7)
+    pdf_file.drawString(margin_x, 30, f"Dicetak oleh: Sahabat Aqiqah - {print_date}")
+
+    pdf_file.save()
+
+    result = open(filename, 'rb')
     response = FileResponse(result, content_type='application/pdf')
-    response['Content-Disposition'] = f'filename="Jadwal_Harian_{today_str}.pdf"'
+    response['Content-Disposition'] = f'filename="{filename}"'
     return response
 
 
@@ -8388,7 +8520,7 @@ def cleanup_pdf_info(request):
         if not has_access:
             return JsonResponse({'error': 'Tidak memiliki akses'}, status=403)
 
-    patterns = ['INVOICE_*.pdf', 'SURAT_JALAN_*.pdf', 'CHECKLIST_*.pdf']
+    patterns = ['INVOICE_*.pdf', 'SURAT_JALAN_*.pdf', 'CHECKLIST_*.pdf', 'Jadwal_Harian_*.pdf']
     files = []
     for pattern in patterns:
         files.extend(glob.glob(os.path.join(settings.BASE_DIR, pattern)))
@@ -8408,7 +8540,7 @@ def cleanup_pdf(request):
         if not has_access:
             return JsonResponse({'error': 'Tidak memiliki akses'}, status=403)
 
-    patterns = ['INVOICE_*.pdf', 'SURAT_JALAN_*.pdf', 'CHECKLIST_*.pdf']
+    patterns = ['INVOICE_*.pdf', 'SURAT_JALAN_*.pdf', 'CHECKLIST_*.pdf', 'Jadwal_Harian_*.pdf']
     deleted = 0
     errors = []
     for pattern in patterns:

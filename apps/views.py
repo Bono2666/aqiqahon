@@ -8249,12 +8249,12 @@ def jadwal_export_excel(request):
     workbook.close()
     output.seek(0)
 
-    today_str = date.today().strftime('%Y-%m-%d')
+    period_str = f'{start}_sd_{end}' if start and end else 'Semua'
     response = HttpResponse(
         output.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    response['Content-Disposition'] = f'attachment; filename="Jadwal_Pesanan_{today_str}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="Jadwal_Pesanan_{period_str}.xlsx"'
     return response
 
 

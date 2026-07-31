@@ -998,6 +998,7 @@ Versi berikutnya akan mendukung:
 - **Jumlah Box** = `(OrderPackage.box_qty × OrderPackage.quantity) + SUM(OrderPackageAddon.quantity WHERE equipment.tipe='Box Paket')`
 - **Form box_qty**: Input box_qty dari form tersimpan ke database. Jika `Package.box = 0`, box_qty = 0.
 - **Export Excel**: Kolom No., Driver, Jenis Kambing (×Qty), Jumlah Kambing (×Qty), Hari & Tanggal Kirim, Masakan & Menu Olahan, Jumlah Box, Nama Pemesan, Sisa Masakan, Jam Berangkat, Jam Tiba, Cabang, Alamat.
+- **Baris Total**: Baris terakhir berisi angka total Jumlah Kambing dan Jumlah Box tanpa label "Total". Kedua angka total menggunakan format **font tebal (bold)** dan **background kuning** (`#FFFF00`).
 - **Cetak PDF**: Format Landscape A4, ReportLab canvas, kolom sama seperti Export Excel. Nama file: `Jadwal_Harian_{start}_{end}.pdf`.
 
 ---

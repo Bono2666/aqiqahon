@@ -5119,6 +5119,7 @@ def order_cs_package_add(request, _id, _cat, _pack, _type):
             package_id=_pack,
             type=_type,
             quantity=int(request.POST.get('quantity')),
+            box_qty=package.box,
             box_type=request.POST.get('box_type'),
             main_cuisine=request.POST.get('main_cuisine') +
             ' (+ Rp ' + str('{:,}'.format(extra_price_main)).replace(',', '.') +

@@ -8104,6 +8104,20 @@ def jadwal_export_excel(request):
     center_format = workbook.add_format({
         'border': 1, 'valign': 'vcenter', 'align': 'center', 'font_size': 12
     })
+    nama_pemesan_format = workbook.add_format({
+        'border': 1, 'valign': 'vcenter', 'text_wrap': True, 'font_size': 12,
+        'bg_color': '#FFFF00'
+    })
+    sisa_masakan_format = workbook.add_format({
+        'border': 1, 'valign': 'vcenter', 'text_wrap': True, 'font_size': 12,
+        'font_color': '#FF0000'
+    })
+    total_label_format = workbook.add_format({
+        'bold': True, 'border': 1, 'valign': 'vcenter', 'font_size': 12
+    })
+    total_number_format = workbook.add_format({
+        'bold': True, 'border': 1, 'valign': 'vcenter', 'align': 'center', 'font_size': 12
+    })
 
     columns = [
         ('No.', 5),
@@ -8134,6 +8148,8 @@ def jadwal_export_excel(request):
         worksheet.set_column(col_idx, col_idx, col_width)
 
     row = 4
+    grand_total_kambing = 0
+    grand_total_box = 0
     for no, order in enumerate(orders.select_related('regional'), 1):
         if not order.regional:
             continue
@@ -8193,6 +8209,9 @@ def jadwal_export_excel(request):
 
         leftover = OrderLeftoverFood.objects.filter(order=order).values_list('leftover_food', flat=True).first() or '-'
 
+        grand_total_kambing += jumlah_kambing
+        grand_total_box += total_box
+
         dt_val = str(order.departure_time or '00:00')
         ta_val = ''
         if order.time_arrival:
@@ -8214,13 +8233,18 @@ def jadwal_export_excel(request):
         worksheet.write_string(row, 4, tanggal, cell_format)
         worksheet.write_string(row, 5, ' | '.join(description_parts) if description_parts else '-', cell_format)
         worksheet.write_number(row, 6, total_box, center_format)
-        worksheet.write_string(row, 7, order.customer_name or '-', cell_format)
-        worksheet.write_string(row, 8, leftover, cell_format)
+        worksheet.write_string(row, 7, order.customer_name or '-', nama_pemesan_format)
+        worksheet.write_string(row, 8, leftover, sisa_masakan_format)
         worksheet.write_string(row, 9, dt_val, center_format)
         worksheet.write_string(row, 10, ta_val, center_format)
         worksheet.write_string(row, 11, order.regional.area_name or '-', cell_format)
         worksheet.write_string(row, 12, order.customer_address or '-', cell_format)
         row += 1
+
+    worksheet.merge_range(row, 0, row, 2, 'Total', total_label_format)
+    worksheet.write_number(row, 3, grand_total_kambing, total_number_format)
+    worksheet.write_number(row, 6, grand_total_box, total_number_format)
+    row += 1
 
     workbook.close()
     output.seek(0)
@@ -8361,6 +8385,9 @@ def jadwal_print_daily(request):
             'schedule_status': schedule_status_labels.get(order.schedule_status or 'UNSCHEDULED', '-'),
         })
 
+    total_kambing = sum(item['jumlah_kambing'] for item in schedule_data)
+    total_box_sum = sum(item['jumlah_box'] for item in schedule_data)
+
     periode = f'{start} s/d {end}' if start and end else 'Semua'
     print_date = timezone.now().strftime('%d %m %Y %H:%M')
 
@@ -8387,7 +8414,7 @@ def jadwal_print_daily(request):
     pdf_file.drawString((page_w - title_w) / 2, y - 8, title)
 
     pdf_file.setFont("Helvetica", 8)
-    info_text = f"Periode: {periode}  |  Dicetak: {print_date}  |  Total: {len(schedule_data)} pesanan"
+    info_text = f"Periode: {periode}  |  Dicetak: {print_date}  |  Total: {len(schedule_data)} pesanan  |  Jumlah Kambing: {total_kambing}  |  Jumlah Box: {total_box_sum}"
     info_w = pdf_file.stringWidth(info_text, "Helvetica", 8)
     pdf_file.drawString((page_w - info_w) / 2, y - 20, info_text)
 

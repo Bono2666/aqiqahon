@@ -8116,7 +8116,8 @@ def jadwal_export_excel(request):
         'bold': True, 'border': 1, 'valign': 'vcenter', 'font_size': 12
     })
     total_number_format = workbook.add_format({
-        'bold': True, 'border': 1, 'valign': 'vcenter', 'align': 'center', 'font_size': 12
+        'bold': True, 'border': 1, 'valign': 'vcenter', 'align': 'center', 'font_size': 12,
+        'bg_color': '#FFFF00'
     })
 
     columns = [
@@ -8241,7 +8242,6 @@ def jadwal_export_excel(request):
         worksheet.write_string(row, 12, order.customer_address or '-', cell_format)
         row += 1
 
-    worksheet.merge_range(row, 0, row, 2, 'Total', total_label_format)
     worksheet.write_number(row, 3, grand_total_kambing, total_number_format)
     worksheet.write_number(row, 6, grand_total_box, total_number_format)
     row += 1

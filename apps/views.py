@@ -8479,7 +8479,7 @@ def jadwal_print_daily(request):
             pdf_file.setFont("Helvetica-Oblique", 7)
             pdf_file.drawString(margin_x, 30, f"Dicetak oleh: Sahabat Aqiqah - {print_date}")
             pdf_file.showPage()
-            pdf_file = canvas.Canvas(filename)
+            pdf_file = canvas.Canvas(filename, pagesize=landscape(A4))
             pdf_file.setFont("Helvetica-Bold", 10)
             pdf_file.drawString(margin_x, page_h - 30, "JADWAL PESANAN HARIAN (lanjutan)")
             pdf_file.setFont("Helvetica", 8)

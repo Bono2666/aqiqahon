@@ -50,7 +50,7 @@
                                         <div class="col-md-6">
                                             <div class="shadow-none">
                                                 <label class="form-control-label" for="input-customer-email">Email</label>
-                                                <input type="text" class="form-control form-control-sm" value="{{ data.customer_email }}" readonly>
+                                                <input type="text" class="form-control form-control-sm" value="{{ data.customer_email|default_if_none:"" }}" readonly>
                                             </div>
                                         </div>
                                     </div>

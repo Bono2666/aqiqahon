@@ -145,7 +145,7 @@
                                 <div class="col-md-3">
                                     <div class="shadow-none">
                                         <label class="form-control-label" for="input-customer-email">Email</label>
-                                        <input type="text" name="customer_email" id="id-customer-email" class="form-control form-control-sm" value="{{ data.customer_email }}" {% if crud == 'view' %}readonly{% endif %}>
+                                        <input type="text" name="customer_email" id="id-customer-email" class="form-control form-control-sm" value="{{ data.customer_email|default_if_none:"" }}" {% if crud == 'view' %}readonly{% endif %}>
                                     </div>
                                 </div>
                                 <div class="col-md-3">

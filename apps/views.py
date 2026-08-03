@@ -4908,8 +4908,8 @@ def order_package_add(request, _id, _cat, _pack, _type, _add):
             up.append(request.POST.get('box_type')
                       ) if extra_price_box > 0 else ''
             extra_price_beverage = Beverage.objects.get(package=_pack, equipment=Equipment.objects.get(
-                equipment_name=request.POST.get('beverage')).equipment_id).extra_price if request.POST.get('beverage') else 0
-            up.append(request.POST.get('beverage')
+                equipment_name=request.POST.get('beverages')).equipment_id).extra_price if request.POST.get('beverages') else 0
+            up.append(request.POST.get('beverages')
                       ) if extra_price_beverage > 0 else ''
 
             package = form.save(commit=False)
@@ -4935,7 +4935,7 @@ def order_package_add(request, _id, _cat, _pack, _type, _add):
             package.beverage = request.POST.get('beverages')
             package.unit_price = selected_package.male_price if _type == 'Jantan' else selected_package.female_price
             package.extra_price = ((extra_price_sub + extra_price_side1 + extra_price_side2 +
-                                   extra_price_side3 + extra_price_side4 + extra_price_side5 + extra_price_rice + extra_price_bag + extra_price_box + extra_price_beverage) * ((selected_package.box if selected_package.box > 0 else 0) * int(request.POST.get('quantity')))) + (extra_price_main * int(request.POST.get('quantity')))
+                                   extra_price_side3 + extra_price_side4 + extra_price_side5 + extra_price_rice + extra_price_bag + extra_price_box + extra_price_beverage) * ((selected_package.box if selected_package.box > 0 else 1) * int(request.POST.get('quantity')))) + (extra_price_main * int(request.POST.get('quantity')))
             package.upgrade = ', '.join(up)
             package.save()
 
@@ -5292,7 +5292,7 @@ def order_package_update(request, _id, _package, _cat, _pack, _type, _add):
             package.beverage = request.POST.get('beverages')
             package.unit_price = selected_package.male_price if _type == 'Jantan' else selected_package.female_price
             package.extra_price = ((extra_price_sub + extra_price_side1 + extra_price_side2 +
-                                   extra_price_side3 + extra_price_side4 + extra_price_side5 + extra_price_rice + extra_price_bag + extra_price_box + extra_price_beverage) * ((selected_package.box if selected_package.box > 0 else 0) * int(request.POST.get('quantity')))) + (extra_price_main * int(request.POST.get('quantity')))
+                                   extra_price_side3 + extra_price_side4 + extra_price_side5 + extra_price_rice + extra_price_bag + extra_price_box + extra_price_beverage) * ((selected_package.box if selected_package.box > 0 else 1) * int(request.POST.get('quantity')))) + (extra_price_main * int(request.POST.get('quantity')))
             package.upgrade = ', '.join(up)
             package.save()
 
@@ -6846,8 +6846,11 @@ def order_invoice(request, _id):
                 beverage_extra_total = selected_beverage.extra_price * box_multiplier * pkg.quantity
 
         package_extra_total = pkg.extra_price or 0
-        beverage_extra_total = min(beverage_extra_total, package_extra_total)
-        other_extra_total = package_extra_total - beverage_extra_total
+        if beverage_extra_total > package_extra_total:
+            total += beverage_extra_total - package_extra_total
+            other_extra_total = 0
+        else:
+            other_extra_total = package_extra_total - beverage_extra_total
 
         if package_extra_total > 0:
             total += package_extra_total
@@ -7365,8 +7368,11 @@ def order_bap(request, _id):
                 beverage_extra_total = selected_beverage.extra_price * box_multiplier * pkg.quantity
 
         package_extra_total = pkg.extra_price or 0
-        beverage_extra_total = min(beverage_extra_total, package_extra_total)
-        other_extra_total = package_extra_total - beverage_extra_total
+        if beverage_extra_total > package_extra_total:
+            total += beverage_extra_total - package_extra_total
+            other_extra_total = 0
+        else:
+            other_extra_total = package_extra_total - beverage_extra_total
 
         if package_extra_total > 0:
             total += package_extra_total
